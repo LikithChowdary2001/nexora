@@ -1,0 +1,27 @@
+{
+  "name": "nexora",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Powered Personalized News Assistant",
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/frontend",
+    "functions"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @nexora/backend\" \"npm run dev -w @nexora/frontend\"",
+    "build": "npm run build -w @nexora/shared && npm run build -w @nexora/backend && npm run build -w @nexora/frontend",
+    "build:functions": "npm run build -w @nexora/functions",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
