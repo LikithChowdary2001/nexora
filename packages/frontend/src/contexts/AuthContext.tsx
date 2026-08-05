@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import api from '@/lib/api';
+import { loadProfileFromFirestore } from '@/lib/profile-fallback';
 import type { UserProfile } from '@nexora/shared';
 
 interface AuthContextType {
@@ -31,17 +32,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshProfile = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      setProfile(null);
+      return;
+    }
+
     try {
       const { data } = await api.get('/users/profile');
-      if (data.success) setProfile(data.data);
-    } catch {
-      try {
-        await api.post('/users/bootstrap');
-        const { data } = await api.get('/users/profile');
-        if (data.success) setProfile(data.data);
-      } catch {
-        setProfile(null);
+      if (data.success) {
+        setProfile(data.data);
+        return;
       }
+    } catch {
+      // fall through to bootstrap / Firestore
+    }
+
+    try {
+      await api.post('/users/bootstrap');
+      const { data } = await api.get('/users/profile');
+      if (data.success) {
+        setProfile(data.data);
+        return;
+      }
+    } catch {
+      // fall through to Firestore
+    }
+
+    try {
+      const localProfile = await loadProfileFromFirestore(uid);
+      setProfile(localProfile);
+    } catch {
+      setProfile(null);
     }
   };
 

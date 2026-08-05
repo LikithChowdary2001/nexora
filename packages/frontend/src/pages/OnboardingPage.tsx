@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -16,8 +16,9 @@ import api from '@/lib/api';
 import { getLocalGreeting, formatDate } from '@/lib/utils';
 import {
   COUNTRIES, PROFESSIONS, LANGUAGE_NAMES, SUPPORTED_LANGUAGES,
-  INTEREST_CATEGORIES, type SupportedLanguage,
+  INTEREST_CATEGORIES, recommendInterests, type SupportedLanguage,
 } from '@nexora/shared';
+import { saveOnboardingToFirestore } from '@/lib/onboarding-fallback';
 
 const STEPS = [
   { id: 'welcome', icon: Sparkles, title: 'Welcome to Nexora' },
@@ -37,6 +38,7 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [customInput, setCustomInput] = useState('');
   const [recommended, setRecommended] = useState<string[]>([]);
@@ -55,11 +57,27 @@ export function OnboardingPage() {
 
   const fetchRecommendations = async () => {
     if (!form.age || !form.profession || !form.country) return;
-    const { data } = await api.get('/users/recommended-interests', {
-      params: { age: form.age, profession: form.profession, country: form.country },
-    });
-    if (data.success) setRecommended(data.data);
+
+    // Always show local recommendations immediately (works offline / when API auth fails)
+    setRecommended(recommendInterests(+form.age, form.profession, form.country));
+
+    try {
+      const { data } = await api.get('/users/recommended-interests', {
+        params: { age: form.age, profession: form.profession, country: form.country },
+      });
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        setRecommended(data.data);
+      }
+    } catch {
+      // API unavailable — local recommendations already applied
+    }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    api.post('/users/bootstrap').catch(() => {});
+    refreshProfile().catch(() => {});
+  }, [user, refreshProfile]);
 
   const canProceed = () => {
     switch (STEPS[step]?.id) {
@@ -77,24 +95,57 @@ export function OnboardingPage() {
   };
 
   const next = async () => {
-    if (STEPS[step]?.id === 'profession') await fetchRecommendations();
+    setError('');
+    if (STEPS[step]?.id === 'profession') {
+      try {
+        await fetchRecommendations();
+      } catch {
+        // Never block onboarding if recommendations fail
+      }
+    }
     if (step < STEPS.length - 1) setStep(step + 1);
     else await submit();
   };
 
   const submit = async () => {
+    if (!user) {
+      setError('You must be signed in to complete onboarding.');
+      return;
+    }
+
     setLoading(true);
+    setError('');
+
+    const payload = {
+      firstName: form.firstName,
+      lastName: form.lastName,
+      age: +form.age,
+      country: form.country,
+      language: form.language,
+      profession: form.profession,
+      interests: form.interests,
+      customInterests: form.customInterests,
+    };
+
     try {
-      await api.post('/users/onboarding', {
-        ...form,
-        age: +form.age,
-        customInterests: form.customInterests,
-      });
+      await api.post('/users/onboarding', payload);
+    } catch {
+      try {
+        await saveOnboardingToFirestore(user, payload);
+      } catch {
+        setError('Could not save your profile. Check your connection and try again.');
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
       i18n.changeLanguage(form.language);
       await refreshProfile();
       setStep(STEPS.length - 1);
       setTimeout(() => navigate('/'), 2000);
     } catch {
+      setError('Profile saved, but refresh failed. Try reloading the page.');
       setLoading(false);
     }
   };
@@ -285,7 +336,11 @@ export function OnboardingPage() {
               )}
 
               {STEPS[step]?.id !== 'finish' && (
-                <div className="flex justify-between mt-8 pt-6 border-t border-border/50">
+                <div className="flex flex-col gap-4 mt-8 pt-6 border-t border-border/50">
+                  {error && (
+                    <p className="text-destructive text-sm text-center bg-destructive/10 rounded-xl p-3">{error}</p>
+                  )}
+                  <div className="flex justify-between">
                   <Button
                     variant="ghost"
                     className="rounded-button"
@@ -304,6 +359,7 @@ export function OnboardingPage() {
                     {step === STEPS.length - 2 ? 'Get Started' : 'Continue'}
                     {step < STEPS.length - 2 && <ChevronRight className="h-4 w-4 ml-1" />}
                   </Button>
+                  </div>
                 </div>
               )}
             </motion.div>
