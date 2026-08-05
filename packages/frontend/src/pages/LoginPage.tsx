@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
@@ -41,9 +41,21 @@ export function LoginPage() {
   const [verifyEmail, setVerifyEmail] = useState('');
 
   const schema = mode === 'signup' ? signUpSchema : signInSchema;
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm({
-    resolver: zodResolver(schema),
+  const resolver = useMemo(() => zodResolver(schema), [schema]);
+  const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
+    resolver,
+    defaultValues: mode === 'signup'
+      ? { email: '', password: '', confirmPassword: '', acceptTerms: false }
+      : { email: '', password: '', rememberMe: false },
   });
+
+  useEffect(() => {
+    reset(
+      mode === 'signup'
+        ? { email: '', password: '', confirmPassword: '', acceptTerms: false }
+        : { email: '', password: '', rememberMe: false }
+    );
+  }, [mode, reset]);
 
   const onSubmit = async (data: Record<string, unknown>) => {
     setError('');
@@ -125,7 +137,7 @@ export function LoginPage() {
                 <p className="text-muted-foreground text-sm mt-1">{t('app.tagline')}</p>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+              <form key={mode} onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                 <div className="space-y-2">
                   <Label htmlFor="email">{t('auth.email')}</Label>
                   <div className="relative">
@@ -158,10 +170,26 @@ export function LoginPage() {
                       <Input id="confirmPassword" type="password" placeholder="••••••••" {...register('confirmPassword')} />
                       {errors.confirmPassword && <p className="text-destructive text-xs">{errors.confirmPassword.message as string}</p>}
                     </div>
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <Checkbox onCheckedChange={(c) => setValue('acceptTerms', !!c)} />
-                      <span className="text-xs text-muted-foreground leading-relaxed">I agree to the Terms of Service and Privacy Policy</span>
-                    </label>
+                    <div className="space-y-2">
+                      <Controller
+                        name="acceptTerms"
+                        control={control}
+                        render={({ field }) => (
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => field.onChange(checked === true)}
+                            />
+                            <span className="text-xs text-muted-foreground leading-relaxed">
+                              I agree to the Terms of Service and Privacy Policy
+                            </span>
+                          </label>
+                        )}
+                      />
+                      {errors.acceptTerms && (
+                        <p className="text-destructive text-xs">{errors.acceptTerms.message as string}</p>
+                      )}
+                    </div>
                   </>
                 )}
 
@@ -190,7 +218,10 @@ export function LoginPage() {
 
                 <Button type="submit" variant="gradient" size="lg" className="w-full rounded-button" disabled={loading}>
                   {loading ? (
-                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Signing in...</span>
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {mode === 'signup' ? 'Creating account...' : 'Signing in...'}
+                    </span>
                   ) : (
                     <>{mode === 'signin' && t('auth.signIn')}{mode === 'signup' && t('auth.signUp')}{mode === 'forgot' && 'Send Reset Link'}</>
                   )}

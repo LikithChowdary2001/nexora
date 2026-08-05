@@ -67,9 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendEmailVerification(credential.user);
     try {
       await api.post('/users/bootstrap');
-    } catch {
-      // Profile will be bootstrapped on next auth refresh
+    } catch (error) {
+      console.warn('Profile bootstrap failed — will retry on onboarding', error);
     }
+    await refreshProfile();
   };
 
   const logout = async () => {

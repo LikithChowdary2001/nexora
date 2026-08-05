@@ -1,6 +1,11 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  loadFirebaseCredentials,
+  parsePrivateKey,
+  validateFirebaseCredentials,
+} from './firebase-credentials.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
@@ -12,6 +17,8 @@ function optionalEnv(key: string, fallback = ''): string {
 function configEnvIsProduction(): boolean {
   return (process.env.NODE_ENV ?? 'development') === 'production';
 }
+
+const firebaseCredentials = loadFirebaseCredentials(process.env);
 
 export const config = {
   env: optionalEnv('NODE_ENV', 'development'),
@@ -26,12 +33,7 @@ export const config = {
   appUrl: optionalEnv('VITE_APP_URL', 'http://localhost:5173'),
   adminEmail: optionalEnv('ADMIN_EMAIL', configEnvIsProduction() ? '' : 'admin@localhost.dev'),
 
-  firebase: {
-    projectId: optionalEnv('FIREBASE_PROJECT_ID'),
-    clientEmail: optionalEnv('FIREBASE_CLIENT_EMAIL'),
-    privateKey: optionalEnv('FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n'),
-    storageBucket: optionalEnv('FIREBASE_STORAGE_BUCKET'),
-  },
+  firebase: firebaseCredentials,
 
   openai: {
     apiKey: optionalEnv('OPENAI_API_KEY'),
@@ -46,7 +48,7 @@ export const config = {
   googleSheets: {
     spreadsheetId: optionalEnv('GOOGLE_SHEETS_SPREADSHEET_ID'),
     serviceAccountEmail: optionalEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL'),
-    privateKey: optionalEnv('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY').replace(/\\n/g, '\n'),
+    privateKey: parsePrivateKey(optionalEnv('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY')),
   },
 
   email: {
@@ -71,10 +73,24 @@ export function validateConfig(): void {
   ];
 
   if (config.env === 'production') {
-    for (const key of [...requiredInProduction, 'ADMIN_EMAIL', 'CRON_SECRET']) {
+    const hasJson = !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+    if (!hasJson) {
+      for (const key of requiredInProduction) {
+        if (!process.env[key]) {
+          throw new Error(`Missing required production env: ${key}`);
+        }
+      }
+    }
+
+    for (const key of ['ADMIN_EMAIL', 'CRON_SECRET']) {
       if (!process.env[key]) {
         throw new Error(`Missing required production env: ${key}`);
       }
+    }
+
+    const firebaseIssues = validateFirebaseCredentials(config.firebase);
+    if (firebaseIssues.length > 0) {
+      throw new Error(`Invalid Firebase credentials: ${firebaseIssues.join('; ')}`);
     }
   }
 }

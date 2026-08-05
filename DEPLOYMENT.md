@@ -41,6 +41,34 @@ Create a **Web Service** on Render with these exact settings:
 
 Copy all variables from `.env.example` into Render environment settings.
 
+### Firebase Admin credentials (fixes `Invalid token` / 401)
+
+If API calls return `{"success":false,"error":"Invalid token"}` and  
+`https://your-api.onrender.com/api/health/ready` returns **503**, Firebase Admin is misconfigured on Render.
+
+**Easiest fix — one env var:**
+
+1. Open your Firebase service account JSON (Firebase Console → Project settings → Service accounts → Generate new private key).
+2. Minify it to **one line** (no line breaks in the JSON).
+3. In Render → your service → **Environment**, add:
+
+| Key | Value |
+|-----|-------|
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Entire JSON on one line |
+
+**Or set three separate vars:**
+
+| Key | Value |
+|-----|-------|
+| `FIREBASE_PROJECT_ID` | `nexora-28cf4` |
+| `FIREBASE_CLIENT_EMAIL` | `firebase-adminsdk-...@nexora-28cf4.iam.gserviceaccount.com` |
+| `FIREBASE_PRIVATE_KEY` | `-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n` (one line, literal `\n`) |
+| `FIREBASE_STORAGE_BUCKET` | `nexora-28cf4.firebasestorage.app` |
+
+Do **not** wrap the private key in extra quotes. After saving, Render redeploys automatically.
+
+Verify: `GET /api/health/ready` should return `{"success":true,"status":"ready"}`.
+
 ## 2. Configure GitHub Secrets
 
 | Secret | Value |

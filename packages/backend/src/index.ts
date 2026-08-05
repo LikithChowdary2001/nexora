@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { config, validateConfig } from './config/index.js';
-import { initializeFirebase } from './firebase/index.js';
+import { initializeFirebase, verifyFirebaseAdmin } from './firebase/index.js';
 import { globalRateLimiter } from './middleware/rateLimit.middleware.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
 import { logger } from './utils/logger.js';
@@ -21,6 +21,12 @@ import cronRoutes from './routes/cron.routes.js';
 
 validateConfig();
 initializeFirebase();
+
+void verifyFirebaseAdmin().then((ok) => {
+  if (!ok && config.env === 'production') {
+    logger.error('Firebase Admin is misconfigured — auth and Firestore API calls will fail');
+  }
+});
 
 const app = express();
 

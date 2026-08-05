@@ -4,6 +4,21 @@ import { logger } from '../utils/logger.js';
 
 let initialized = false;
 
+export async function verifyFirebaseAdmin(): Promise<boolean> {
+  try {
+    initializeFirebase();
+    await getAuth().listUsers(1);
+    return true;
+  } catch (error) {
+    logger.error('Firebase Admin verification failed', {
+      message: error instanceof Error ? error.message : 'unknown',
+      code: (error as { code?: string }).code,
+      projectId: config.firebase.projectId,
+    });
+    return false;
+  }
+}
+
 export function initializeFirebase(): admin.app.App {
   if (initialized && admin.apps.length > 0) {
     return admin.apps[0]!;

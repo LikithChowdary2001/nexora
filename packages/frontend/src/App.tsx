@@ -36,11 +36,19 @@ function PageLoader() {
   );
 }
 
+function LoginRoute() {
+  const { user, profile, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (user && profile?.onboardingCompleted) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/onboarding" replace />;
+  return <LoginPage />;
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  if (profile && !profile.onboardingCompleted) return <Navigate to="/onboarding" replace />;
+  if (!profile?.onboardingCompleted) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;
 }
 
@@ -58,7 +66,7 @@ function AppRoutes() {
     <>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+          <Route path="/login" element={<LoginRoute />} />
           <Route path="/onboarding" element={user ? <OnboardingPage /> : <Navigate to="/login" replace />} />
           <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
           <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />

@@ -1,10 +1,20 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import { getMissingFirebaseEnv } from '@/lib/env';
+import { SetupError } from '@/components/SetupError';
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+const missing = getMissingFirebaseEnv();
+const root = createRoot(document.getElementById('root')!);
+
+if (missing.length > 0) {
+  root.render(<SetupError missing={missing} />);
+} else {
+  import('./App').then(({ default: App }) => {
+    root.render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    );
+  });
+}

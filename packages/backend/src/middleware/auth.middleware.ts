@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { getAuth, getFirestore } from '../firebase/index.js';
 import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 import type { UserProfile } from '@nexora/shared';
 
 export interface AuthenticatedRequest extends Request {
@@ -30,7 +31,12 @@ export async function authenticate(
     }
 
     next();
-  } catch {
+  } catch (error) {
+    logger.warn('Token verification failed', {
+      message: error instanceof Error ? error.message : 'unknown',
+      code: (error as { code?: string }).code,
+      projectId: config.firebase.projectId,
+    });
     res.status(401).json({ success: false, error: 'Invalid token' });
   }
 }
