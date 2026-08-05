@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -34,7 +34,7 @@ const STEPS = [
 
 export function OnboardingPage() {
   const { i18n } = useTranslation();
-  const { user, refreshProfile, applyProfile } = useAuth();
+  const { user, profile, applyProfile } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -42,6 +42,7 @@ export function OnboardingPage() {
   const [showCustom, setShowCustom] = useState(false);
   const [customInput, setCustomInput] = useState('');
   const [recommended, setRecommended] = useState<string[]>([]);
+  const savedProfileRef = useRef<ReturnType<typeof buildProfileFromOnboarding> | null>(null);
 
   const [form, setForm] = useState({
     firstName: '', lastName: '', age: '', country: '', language: 'en' as SupportedLanguage,
@@ -76,8 +77,13 @@ export function OnboardingPage() {
   useEffect(() => {
     if (!user) return;
     api.post('/users/bootstrap').catch(() => {});
-    refreshProfile().catch(() => {});
-  }, [user, refreshProfile]);
+  }, [user]);
+
+  const finishAndGoHome = (completedProfile: ReturnType<typeof buildProfileFromOnboarding>) => {
+    savedProfileRef.current = completedProfile;
+    applyProfile(completedProfile);
+    navigate('/', { replace: true });
+  };
 
   const canProceed = () => {
     switch (STEPS[step]?.id) {
@@ -145,20 +151,35 @@ export function OnboardingPage() {
     }
 
     applyProfile(completedProfile);
+    savedProfileRef.current = completedProfile;
     i18n.changeLanguage(form.language);
     setStep(STEPS.length - 1);
     setLoading(false);
 
-    // Refresh in background; don't block redirect
-    refreshProfile().catch(() => {});
-
-    window.setTimeout(() => {
-      navigate('/', { replace: true });
-    }, 1500);
+    // Redirect immediately — profile is in context + localStorage
+    finishAndGoHome(completedProfile);
   };
 
   const goHome = () => {
-    navigate('/', { replace: true });
+    if (!user) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    const profileToUse =
+      savedProfileRef.current ??
+      (profile?.onboardingCompleted ? profile : buildProfileFromOnboarding(user, {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        age: +form.age,
+        country: form.country,
+        language: form.language,
+        profession: form.profession,
+        interests: form.interests,
+        customInterests: form.customInterests,
+      }));
+
+    finishAndGoHome(profileToUse);
   };
 
   const greeting = form.firstName ? getLocalGreeting(form.firstName).greeting : '';

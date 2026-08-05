@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
     } catch {
-      // fall through to bootstrap / Firestore
+      // fall through
     }
 
     try {
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
     } catch {
-      // fall through to Firestore
+      // fall through
     }
 
     try {
@@ -82,10 +82,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
     } catch {
-      // keep cached profile if any
+      // fall through
     }
 
-    if (!cached) setProfile(null);
+    // Never wipe a profile that exists in localStorage (avoids race after onboarding)
+    const persisted = loadProfileLocally(uid);
+    if (persisted) {
+      applyProfile(persisted);
+      return;
+    }
+
+    setProfile(null);
+    setClientProfile(null);
   };
 
   useEffect(() => {

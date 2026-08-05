@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { loadProfileLocally } from '@/lib/profile-storage';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import '@/lib/i18n';
@@ -48,7 +49,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  if (!profile?.onboardingCompleted) return <Navigate to="/onboarding" replace />;
+
+  const uid = user.uid;
+  const localProfile = uid ? loadProfileLocally(uid) : null;
+  const effectiveProfile = profile ?? localProfile;
+
+  if (!effectiveProfile?.onboardingCompleted) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;
 }
 
@@ -56,7 +62,11 @@ function OnboardingRoute() {
   const { user, profile, loading } = useAuth();
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  if (profile?.onboardingCompleted) return <Navigate to="/" replace />;
+
+  const localProfile = loadProfileLocally(user.uid);
+  if (profile?.onboardingCompleted || localProfile?.onboardingCompleted) {
+    return <Navigate to="/" replace />;
+  }
   return <OnboardingPage />;
 }
 
