@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { AppError } from '../utils/errors.js';
+import { AppError, isFirestoreUnavailableError, ServiceUnavailableError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { errorLogRepository } from '../repositories/index.js';
 import { incrementErrorCount } from '../controllers/health.controller.js';
@@ -18,6 +18,18 @@ export function errorHandler(
       success: false,
       error: err.message,
       code: err.code,
+    });
+    return;
+  }
+
+  if (isFirestoreUnavailableError(err)) {
+    const firestoreError = new ServiceUnavailableError(
+      'Firestore is not enabled. Create a Firestore database in Firebase Console for project nexora-28cf4.'
+    );
+    res.status(firestoreError.statusCode).json({
+      success: false,
+      error: firestoreError.message,
+      code: 'FIRESTORE_UNAVAILABLE',
     });
     return;
   }

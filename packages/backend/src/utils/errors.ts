@@ -40,3 +40,19 @@ export class RateLimitError extends AppError {
     super(429, message, 'RATE_LIMIT');
   }
 }
+
+export class ServiceUnavailableError extends AppError {
+  constructor(message = 'Service temporarily unavailable') {
+    super(503, message, 'SERVICE_UNAVAILABLE');
+  }
+}
+
+export function isFirestoreUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: number | string }).code;
+  return (
+    code === 7 ||
+    error.message.includes('Cloud Firestore API has not been used') ||
+    error.message.includes('PERMISSION_DENIED')
+  );
+}
