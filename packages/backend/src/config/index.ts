@@ -18,7 +18,11 @@ export const config = {
   port: parseInt(optionalEnv('PORT', '3001'), 10),
   isDev: optionalEnv('NODE_ENV', 'development') === 'development',
 
-  corsOrigin: optionalEnv('CORS_ORIGIN', 'http://localhost:5173'),
+  corsOrigin: optionalEnv('CORS_ORIGIN', 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  cronSecret: optionalEnv('CRON_SECRET'),
   appUrl: optionalEnv('VITE_APP_URL', 'http://localhost:5173'),
   adminEmail: optionalEnv('ADMIN_EMAIL', configEnvIsProduction() ? '' : 'admin@localhost.dev'),
 
@@ -67,7 +71,7 @@ export function validateConfig(): void {
   ];
 
   if (config.env === 'production') {
-    for (const key of [...requiredInProduction, 'ADMIN_EMAIL']) {
+    for (const key of [...requiredInProduction, 'ADMIN_EMAIL', 'CRON_SECRET']) {
       if (!process.env[key]) {
         throw new Error(`Missing required production env: ${key}`);
       }

@@ -5,6 +5,7 @@ import { userController } from '../controllers/user.controller.js';
 
 const router = Router();
 
+router.post('/bootstrap', authenticate, asyncHandler(userController.bootstrap.bind(userController)));
 router.get('/profile', authenticate, asyncHandler(userController.getProfile.bind(userController)));
 router.post('/onboarding', authenticate, asyncHandler(userController.completeOnboarding.bind(userController)));
 router.put('/profile', authenticate, asyncHandler(userController.updateProfile.bind(userController)));

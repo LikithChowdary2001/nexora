@@ -17,6 +17,7 @@ import adminRoutes from './routes/admin.routes.js';
 import healthRoutes from './routes/health.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import digestRoutes from './routes/digest.routes.js';
+import cronRoutes from './routes/cron.routes.js';
 
 validateConfig();
 initializeFirebase();
@@ -27,6 +28,8 @@ app.use(helmet());
 app.use(compression());
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
+
+app.use('/api/cron', cronRoutes);
 app.use(globalRateLimiter);
 
 app.use((req, _res, next) => {
@@ -49,7 +52,7 @@ app.use('/api/digest', digestRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(config.port, () => {
+app.listen(config.port, '0.0.0.0', () => {
   logger.info(`Nexora API v1.0.0 running on port ${config.port}`, { env: config.env });
 });
 

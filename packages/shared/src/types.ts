@@ -29,6 +29,7 @@ export interface UserProfile {
   avatarUrl?: string;
   timezone?: string;
   fcmToken?: string;
+  lastLogin?: string;
   createdAt: string;
   updatedAt: string;
 }

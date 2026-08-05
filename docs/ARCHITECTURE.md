@@ -1,6 +1,6 @@
 # Nexora Architecture
 
-## System Overview
+## System Overview (Free Tier)
 
 ```mermaid
 graph TB
@@ -9,20 +9,24 @@ graph TB
         FCM[Firebase Cloud Messaging]
     end
 
-    subgraph Firebase
+    subgraph Firebase_Spark[Firebase Spark - Free]
         Auth[Firebase Auth]
         FS[Firestore]
         Storage[Firebase Storage]
         Hosting[Firebase Hosting]
-        CF[Cloud Functions]
     end
 
-    subgraph Backend
+    subgraph Render_Free[Render Free Web Service]
         API[Express REST API]
         AI[OpenAI GPT Service]
         News[News Aggregation]
         Email[Email Service]
         Sheets[Google Sheets Sync]
+        CronEndpoints["/api/cron/*"]
+    end
+
+    subgraph GitHub_Actions[GitHub Actions - Free]
+        CronScheduler[Scheduled Cron Workflow]
     end
 
     subgraph External
@@ -35,6 +39,7 @@ graph TB
     PWA --> Auth
     PWA --> API
     PWA --> FS
+    Hosting --> PWA
     API --> FS
     API --> AI
     API --> News
@@ -44,75 +49,56 @@ graph TB
     News --> NewsAPI
     News --> RSS
     AI --> OpenAI
-    CF --> FS
-    CF --> Email
-    CF --> FCM
-    Hosting --> PWA
+    API --> FCM
+    CronScheduler --> CronEndpoints
+    CronEndpoints --> FS
+    CronEndpoints --> Email
 ```
 
-## Data Flow — News Pipeline
+## Backend Structure
 
 ```
-Search Query / User Interests
-        ↓
-  Fetch from Providers (parallel)
-  ├── Google News RSS
-  ├── GNews API
-  └── NewsAPI
-        ↓
-  Deduplicate Articles
-        ↓
-  Rank by Personalization Score
-  ├── Interests (40%)
-  ├── Profession (20%)
-  ├── Age (10%)
-  ├── Country (10%)
-  ├── Reading History (5%)
-  └── Trending Topics (5%)
-        ↓
-  OpenAI GPT Summarization
-        ↓
-  Deliver to User (Feed / Search / Digest)
+packages/backend/src/
+├── routes/           # Express routers
+│   ├── user.routes   # Profile, onboarding, bootstrap
+│   ├── cron.routes   # Scheduled job triggers (CRON_SECRET)
+│   └── ...
+├── controllers/      # Request handlers
+├── services/         # Business logic
+│   ├── cron.service  # Digest, analytics, trending, cache, health
+│   ├── ai.service
+│   ├── news.service
+│   └── email.service
+├── repositories/     # Firestore data access
+└── middleware/       # Auth, rate limit, cron secret
 ```
 
-## Firestore Collections
+## Scheduled Jobs
 
-| Collection | Purpose |
-|-----------|---------|
-| `users` | User profiles and preferences |
-| `bookmarks` | Saved articles |
-| `preferences` | Theme, language, notification settings |
-| `readingHistory` | Article read tracking |
-| `searchHistory` | Search query log |
-| `dailyDigest` | Generated daily digests |
-| `notifications` | In-app notifications |
-| `adminLogs` | Admin action audit trail |
-| `analytics` | Daily analytics snapshots |
+All former Cloud Functions are HTTP cron endpoints on the Express API, triggered by `.github/workflows/cron.yml`:
 
-## Folder Structure
+| Endpoint | Schedule | Purpose |
+|----------|----------|---------|
+| `POST /api/cron/daily-digest` | Hourly | Send 9 AM local digests |
+| `POST /api/cron/sync-analytics` | Daily midnight UTC | Write analytics snapshot |
+| `POST /api/cron/refresh-trending` | Every 6 hours | Update TrendingTopics |
+| `POST /api/cron/cleanup-cache` | Daily 2 AM UTC | Purge expired NewsCache |
+| `POST /api/cron/record-health` | Every 15 minutes | Log SystemHealth |
 
-```
-packages/
-├── shared/src/
-│   ├── types.ts          # Shared TypeScript interfaces
-│   ├── constants.ts      # Greeting, interests, utilities
-│   └── index.ts
-├── backend/src/
-│   ├── config/           # Environment configuration
-│   ├── middleware/       # Auth, rate limiting
-│   ├── routes/           # REST API routes
-│   ├── services/         # Business logic
-│   └── index.ts
-└── frontend/src/
-    ├── components/
-    │   ├── ui/           # ShadCN UI components
-    │   ├── auth/         # Login animations
-    │   ├── news/         # News cards
-    │   └── ai/           # AI assistant
-    ├── contexts/         # Auth, theme providers
-    ├── lib/              # Firebase, API, i18n, utils
-    ├── pages/            # Route pages
-    └── App.tsx
-functions/src/
-└── index.ts              # Daily digest, user creation, analytics
-```
+## User Registration
+
+1. Frontend creates Firebase Auth user
+2. Frontend calls `POST /api/users/bootstrap` (replaces Auth trigger)
+3. Backend creates Firestore `users/{uid}` with admin role if email matches `ADMIN_EMAIL`
+4. User completes onboarding via `POST /api/users/onboarding`
+
+## Deployment
+
+| Component | Platform |
+|-----------|----------|
+| Frontend | Firebase Hosting (Spark) |
+| API | Render Free Web Service |
+| Cron | GitHub Actions |
+| Database | Firestore (Spark) |
+
+See [DEPLOYMENT.md](../DEPLOYMENT.md) for setup instructions.

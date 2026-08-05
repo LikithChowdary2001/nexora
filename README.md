@@ -10,29 +10,25 @@ Nexora is an enterprise-grade, AI-powered personalized news platform that learns
 nexora/
 ├── packages/
 │   ├── shared/          # Shared TypeScript types & utilities
-│   ├── backend/         # Express REST API (Node.js + TypeScript)
-│   └── frontend/        # React + Vite + Tailwind + ShadCN UI
-├── functions/           # Firebase Cloud Functions (daily digest, FCM)
-├── firebase.json        # Firebase hosting, Firestore, functions config
+│   ├── backend/         # Express REST API (Render free tier)
+│   └── frontend/        # React + Vite PWA (Firebase Hosting)
+├── render.yaml          # Render backend deployment blueprint
+├── firebase.json        # Firebase Hosting, Firestore, Storage (Spark plan)
 ├── firestore.rules      # Security rules
-└── .github/workflows/   # CI/CD pipeline
+└── .github/workflows/   # CI/CD + scheduled cron jobs
 ```
-
-
 
 ### Tech Stack
 
-
-| Layer    | Technology                                                                        |
-| -------- | --------------------------------------------------------------------------------- |
-| Frontend | React, Vite, TypeScript, Tailwind CSS, ShadCN UI, Framer Motion, React Query, PWA |
-| Backend  | Node.js, Express, TypeScript, Firebase Admin SDK                                  |
-| Database | Firebase Firestore                                                                |
-| Auth     | Firebase Authentication                                                           |
-| Storage  | Firebase Storage                                                                  |
-| AI       | OpenAI GPT-4o                                                                     |
-| Hosting  | Firebase Hosting                                                                  |
-| CI/CD    | GitHub Actions                                                                    |
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React, Vite, TypeScript, Tailwind, PWA — **Firebase Hosting (Spark)** |
+| Backend | Node.js, Express — **Render Free Web Service** |
+| Database | Firebase Firestore (Spark) |
+| Auth | Firebase Authentication (Spark) |
+| Storage | Firebase Storage (Spark) |
+| Cron jobs | GitHub Actions → `/api/cron/*` |
+| AI | OpenAI GPT-4o |
 
 
 
@@ -43,8 +39,9 @@ nexora/
 
 ### Prerequisites
 
-- Node.js 18+
-- Firebase project with Auth, Firestore, Storage, Hosting enabled
+- Node.js 20+
+- Firebase project with Auth, Firestore, Storage, Hosting (Spark plan — free)
+- Render account (free) for backend API
 - OpenAI API key
 - NewsAPI and/or GNews API keys (optional)
 
@@ -78,8 +75,10 @@ Backend API: [http://localhost:3001/api](http://localhost:3001/api)
 npm install -g firebase-tools
 firebase login
 firebase use <your-project-id>
-firebase deploy
+firebase deploy --only hosting,firestore:rules,firestore:indexes,storage
 ```
+
+Deploy the backend to Render — see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 
 
@@ -142,7 +141,7 @@ See `.env.example` for the complete list. Key variables:
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for full instructions. The Express API deploys separately (Cloud Run); Firebase Hosting serves the frontend.
 
-Push to `main` triggers GitHub Actions: build, test, deploy Firestore rules, functions, and hosting.
+Push to `main` triggers GitHub Actions: build, test, deploy Firestore rules, and Firebase Hosting. Backend deploys via Render (see DEPLOYMENT.md).
 
 Required GitHub Secrets: `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_PROJECT_ID`, `ADMIN_EMAIL`, `VITE_FIREBASE_*`
 

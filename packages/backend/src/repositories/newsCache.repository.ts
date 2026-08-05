@@ -52,6 +52,17 @@ export class NewsCacheRepository extends BaseRepository<NewsCacheEntry> {
       cachedAt: new Date().toISOString(),
     });
   }
+
+  async deleteExpired(limit = 500): Promise<number> {
+    const now = new Date().toISOString();
+    const snapshot = await this.col().where('expiresAt', '<', now).limit(limit).get();
+    if (snapshot.empty) return 0;
+
+    const batch = this.db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    return snapshot.size;
+  }
 }
 
 export const newsCacheRepository = new NewsCacheRepository();

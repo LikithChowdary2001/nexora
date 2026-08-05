@@ -5,6 +5,7 @@ import { ValidationError, NotFoundError } from '../utils/errors.js';
 import { sendSuccess } from '../utils/response.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { config } from '../config/index.js';
+import { getAuth } from '../firebase/index.js';
 import { personalizationService } from '../services/personalization.service.js';
 import type { OnboardingData, SupportedLanguage } from '@nexora/shared';
 
@@ -21,6 +22,42 @@ const onboardingSchema = z.object({
 });
 
 export class UserController {
+  async bootstrap(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.uid) throw new ValidationError('Unauthorized');
+
+    const existing = await userRepository.findByUid(req.uid);
+    if (existing) {
+      sendSuccess(res, existing);
+      return;
+    }
+
+    const authUser = await getAuth().getUser(req.uid);
+    const now = new Date().toISOString();
+    const email = authUser.email ?? '';
+    const isAdmin = !!config.adminEmail && email === config.adminEmail;
+
+    const profile = await userRepository.upsert(req.uid, {
+      uid: req.uid,
+      email,
+      firstName: '',
+      lastName: '',
+      age: 0,
+      country: '',
+      language: 'en',
+      profession: '',
+      role: isAdmin ? 'admin' : 'user',
+      emailVerified: authUser.emailVerified,
+      onboardingCompleted: false,
+      interests: [],
+      customInterests: [],
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      createdAt: now,
+      lastLogin: now,
+    });
+
+    sendSuccess(res, profile, 201);
+  }
+
   async getProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (!req.uid) throw new ValidationError('Unauthorized');
     const profile = await userRepository.findByUid(req.uid);

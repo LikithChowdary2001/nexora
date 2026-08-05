@@ -35,7 +35,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await api.get('/users/profile');
       if (data.success) setProfile(data.data);
     } catch {
-      setProfile(null);
+      try {
+        await api.post('/users/bootstrap');
+        const { data } = await api.get('/users/profile');
+        if (data.success) setProfile(data.data);
+      } catch {
+        setProfile(null);
+      }
     }
   };
 
@@ -59,6 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string) => {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     await sendEmailVerification(credential.user);
+    try {
+      await api.post('/users/bootstrap');
+    } catch {
+      // Profile will be bootstrapped on next auth refresh
+    }
   };
 
   const logout = async () => {

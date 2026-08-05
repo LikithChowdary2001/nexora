@@ -35,6 +35,12 @@ All notable changes to Nexora are documented in this file.
 - Wired error metrics via `incrementErrorCount`
 - Frontend test suite for CI compatibility
 
+### Fixed
+- Removed Firebase Cloud Functions dependency (Blaze plan no longer required)
+- Migrated scheduled jobs to Express `/api/cron/*` + GitHub Actions
+- Replaced Auth trigger with `/api/users/bootstrap`
+- Backend deploys to Render free tier
+
 ### Documentation
 - SETUP.md, DEPLOYMENT.md, CONTRIBUTING.md, SECURITY.md
 - Production readiness report

@@ -49,3 +49,5 @@ npm run build
 ```
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for production deployment.
+
+Set `CRON_SECRET` in `.env` for local cron endpoint testing.

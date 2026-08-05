@@ -65,8 +65,23 @@ export class DailyDigestRepository extends BaseRepository<DailyDigest> {
   }
 
   async getTodayDigest(userId: string, date: string): Promise<DailyDigest | null> {
-    const results = await this.findWhere('userId', '==', userId, 1);
-    return results.find((d) => d.date === date) ?? null;
+    const snapshot = await this.col()
+      .where('userId', '==', userId)
+      .where('date', '==', date)
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() } as DailyDigest;
+  }
+
+  async existsForUserDate(userId: string, date: string): Promise<boolean> {
+    const snapshot = await this.col()
+      .where('userId', '==', userId)
+      .where('date', '==', date)
+      .limit(1)
+      .get();
+    return !snapshot.empty;
   }
 }
 

@@ -1,0 +1,64 @@
+name: Scheduled Jobs
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+    - cron: '0 0 * * *'
+    - cron: '0 */6 * * *'
+    - cron: '0 2 * * *'
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+env:
+  API_URL: ${{ secrets.RENDER_API_URL }}
+
+jobs:
+  hourly-digest:
+    if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run daily digest job
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${API_URL}/api/cron/daily-digest"
+
+  daily-analytics:
+    if: github.event.schedule == '0 0 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync analytics
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${API_URL}/api/cron/sync-analytics"
+
+  refresh-trending:
+    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh trending topics
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${API_URL}/api/cron/refresh-trending"
+
+  cleanup-cache:
+    if: github.event.schedule == '0 2 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup expired news cache
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${API_URL}/api/cron/cleanup-cache"
+
+  record-health:
+    if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record system health
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${API_URL}/api/cron/record-health"
