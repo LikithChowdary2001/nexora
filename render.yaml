@@ -1,5 +1,6 @@
 # Render Blueprint — Nexora Backend (Free Tier)
-# https://render.com/docs/blueprint-spec
+# IMPORTANT: Root Directory must be the repository root (leave blank in Render dashboard).
+# Do NOT set Root Directory to packages/backend.
 
 services:
   - type: web
@@ -8,8 +9,9 @@ services:
     plan: free
     region: oregon
     branch: main
-    buildCommand: npm ci && npm run build:backend
-    startCommand: npm run start:backend
+    rootDir: .
+    buildCommand: npm ci && npm run render:build
+    startCommand: npm run render:start
     healthCheckPath: /api/health/live
     autoDeploy: true
     envVars:

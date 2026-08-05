@@ -27,10 +27,17 @@ Nexora runs entirely on **free-tier services** — no Firebase Blaze plan requir
 
 ### Option B: Manual Web Service
 
-- **Build command:** `npm ci && npm run build:backend`
-- **Start command:** `npm run start:backend`
-- **Health check:** `/api/health/live`
-- **Node version:** 20
+Create a **Web Service** on Render with these exact settings:
+
+| Setting | Value |
+|---------|-------|
+| **Root Directory** | *(leave blank — repo root)* |
+| **Environment** | Node |
+| **Build Command** | `npm ci && npm run render:build` |
+| **Start Command** | `npm run render:start` |
+| **Health Check Path** | `/api/health/live` |
+
+> **Critical:** Do **not** set Root Directory to `packages/backend`. This is an npm workspace monorepo — Render must build from the repository root so `@nexora/shared` resolves correctly.
 
 Copy all variables from `.env.example` into Render environment settings.
 
