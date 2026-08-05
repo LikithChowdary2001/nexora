@@ -59,9 +59,12 @@ export class UserController {
       sendSuccess(res, profile, 201);
     } catch (error) {
       if (isFirestoreUnavailableError(error)) {
-        throw new ServiceUnavailableError(
-          'Firestore is not enabled. Create a Firestore database in Firebase Console.'
-        );
+        sendSuccess(res, {
+          uid: req.uid,
+          deferred: true,
+          message: 'Firestore not ready — profile saved locally on device',
+        });
+        return;
       }
       throw error;
     }
@@ -77,7 +80,7 @@ export class UserController {
     } catch (error) {
       if (isFirestoreUnavailableError(error)) {
         throw new ServiceUnavailableError(
-          'Firestore is not enabled. Create a Firestore database in Firebase Console.'
+          'Firestore is not enabled. Profile is available from local device cache.'
         );
       }
       throw error;

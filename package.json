@@ -17,6 +17,7 @@
     "render:start": "node packages/backend/dist/index.js",
     "build:hosting": "npm run build -w @nexora/shared && npm run build -w @nexora/frontend",
     "deploy:hosting": "npm run build:hosting && firebase deploy --only hosting",
+    "test:e2e-api": "node scripts/e2e-api-test.mjs",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"

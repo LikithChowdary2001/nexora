@@ -22,13 +22,22 @@ export function AIAssistant() {
       });
       return data.data;
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { error?: string; code?: string } } };
+      const serverMsg = axiosErr.response?.data?.error;
+      const code = axiosErr.response?.data?.code;
+      let content = 'Sorry, I could not respond right now. Please try again in a moment.';
+      if (code === 'AI_NOT_CONFIGURED') {
+        content = 'AI assistant is not configured on the server yet (OPENAI_API_KEY missing on Render).';
+      } else if (serverMsg) {
+        content = serverMsg;
+      }
       setMessages((prev) => [
         ...prev,
         {
           id: `${Date.now()}-error`,
           role: 'assistant',
-          content: 'Sorry, I could not respond right now. Please try again in a moment.',
+          content,
           timestamp: new Date().toISOString(),
         },
       ]);

@@ -27,19 +27,39 @@ router.post('/chat', aiRateLimiter, authenticate, requireProfile, asyncHandler(a
   const { message, articleIds, language, sessionId } = chatSchema.parse(req.body);
   const lang = (language || user.language || 'en') as SupportedLanguage;
 
-  let articles = [];
-  if (articleIds?.length) {
-    const feed = await fetchNewsFromAllProviders('', user);
-    articles = feed.filter((a) => articleIds.includes(a.id));
-  } else {
-    articles = (await fetchNewsFromAllProviders('latest news', user)).slice(0, 10);
+  let articles: Awaited<ReturnType<typeof fetchNewsFromAllProviders>> = [];
+  try {
+    if (articleIds?.length) {
+      const feed = await fetchNewsFromAllProviders('', user);
+      articles = feed.filter((a) => articleIds.includes(a.id));
+    } else {
+      articles = (await fetchNewsFromAllProviders('latest news', user)).slice(0, 10);
+    }
+  } catch (error) {
+    logger.warn('News fetch failed for AI chat — continuing without article context', {
+      message: error instanceof Error ? error.message : 'unknown',
+    });
   }
 
-  const response = await chatWithAssistant(
-    { message, articleIds, language: lang },
-    articles,
-    user
-  );
+  let response;
+  try {
+    response = await chatWithAssistant(
+      { message, articleIds, language: lang },
+      articles,
+      user
+    );
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'unknown';
+    if (msg.includes('OpenAI API key not configured')) {
+      res.status(503).json({
+        success: false,
+        error: 'AI assistant is not configured. Add OPENAI_API_KEY on Render.',
+        code: 'AI_NOT_CONFIGURED',
+      });
+      return;
+    }
+    throw error;
+  }
 
   const now = new Date().toISOString();
   const userMessage = { id: uuidv4(), role: 'user' as const, content: message, timestamp: now };

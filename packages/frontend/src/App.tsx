@@ -40,7 +40,8 @@ function PageLoader() {
 function LoginRoute() {
   const { user, profile, loading } = useAuth();
   if (loading) return <PageLoader />;
-  if (user && profile?.onboardingCompleted) return <Navigate to="/" replace />;
+  const localCompleted = user ? loadProfileLocally(user.uid)?.onboardingCompleted : false;
+  if (user && (profile?.onboardingCompleted || localCompleted)) return <Navigate to="/" replace />;
   if (user) return <Navigate to="/onboarding" replace />;
   return <LoginPage />;
 }

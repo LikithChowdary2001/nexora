@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Sparkles, User, Globe, Languages, Briefcase, Heart,
@@ -35,7 +34,6 @@ const STEPS = [
 export function OnboardingPage() {
   const { i18n } = useTranslation();
   const { user, profile, applyProfile } = useAuth();
-  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -79,10 +77,66 @@ export function OnboardingPage() {
     api.post('/users/bootstrap').catch(() => {});
   }, [user]);
 
-  const finishAndGoHome = (completedProfile: ReturnType<typeof buildProfileFromOnboarding>) => {
-    savedProfileRef.current = completedProfile;
+  const submit = async () => {
+    if (!user) {
+      setError('You must be signed in to complete onboarding.');
+      return;
+    }
+
+    if (!form.firstName.trim() || !form.interests.length) {
+      setError('Please complete all required steps before finishing.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    const payload = {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      age: +form.age,
+      country: form.country,
+      language: form.language,
+      profession: form.profession,
+      interests: form.interests,
+      customInterests: form.customInterests,
+    };
+
+    const completedProfile = buildProfileFromOnboarding(user, payload);
     applyProfile(completedProfile);
-    navigate('/', { replace: true });
+    savedProfileRef.current = completedProfile;
+    i18n.changeLanguage(form.language);
+
+    // Sync to server in background — never block the redirect
+    void api.post('/users/onboarding', payload).catch(() => {});
+    void saveOnboardingToFirestore(user, payload).catch(() => {});
+
+    // Hard navigation: reloads app with profile from localStorage (bypasses router races)
+    window.location.replace('/');
+  };
+
+  const goHome = () => {
+    if (!user) {
+      window.location.replace('/login');
+      return;
+    }
+
+    const profileToUse =
+      savedProfileRef.current ??
+      (profile?.onboardingCompleted ? profile : buildProfileFromOnboarding(user, {
+        firstName: form.firstName.trim() || 'User',
+        lastName: form.lastName.trim(),
+        age: +form.age || 25,
+        country: form.country || 'United States',
+        language: form.language,
+        profession: form.profession || 'Other',
+        interests: form.interests.length ? form.interests : ['Technology'],
+        customInterests: form.customInterests,
+      }));
+
+    applyProfile(profileToUse);
+    savedProfileRef.current = profileToUse;
+    window.location.replace('/');
   };
 
   const canProceed = () => {
@@ -111,75 +165,6 @@ export function OnboardingPage() {
     }
     if (step < STEPS.length - 1) setStep(step + 1);
     else await submit();
-  };
-
-  const submit = async () => {
-    if (!user) {
-      setError('You must be signed in to complete onboarding.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    const payload = {
-      firstName: form.firstName,
-      lastName: form.lastName,
-      age: +form.age,
-      country: form.country,
-      language: form.language,
-      profession: form.profession,
-      interests: form.interests,
-      customInterests: form.customInterests,
-    };
-
-    let completedProfile = buildProfileFromOnboarding(user, payload);
-
-    try {
-      const { data } = await api.post('/users/onboarding', payload);
-      if (data.success && data.data) {
-        completedProfile = data.data;
-      }
-    } catch {
-      try {
-        completedProfile = await saveOnboardingToFirestore(user, payload);
-      } catch {
-        setError('Could not save your profile. Check your connection and try again.');
-        setLoading(false);
-        return;
-      }
-    }
-
-    applyProfile(completedProfile);
-    savedProfileRef.current = completedProfile;
-    i18n.changeLanguage(form.language);
-    setStep(STEPS.length - 1);
-    setLoading(false);
-
-    // Redirect immediately — profile is in context + localStorage
-    finishAndGoHome(completedProfile);
-  };
-
-  const goHome = () => {
-    if (!user) {
-      navigate('/login', { replace: true });
-      return;
-    }
-
-    const profileToUse =
-      savedProfileRef.current ??
-      (profile?.onboardingCompleted ? profile : buildProfileFromOnboarding(user, {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        age: +form.age,
-        country: form.country,
-        language: form.language,
-        profession: form.profession,
-        interests: form.interests,
-        customInterests: form.customInterests,
-      }));
-
-    finishAndGoHome(profileToUse);
   };
 
   const greeting = form.firstName ? getLocalGreeting(form.firstName).greeting : '';
