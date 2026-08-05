@@ -69,6 +69,21 @@ Do **not** wrap the private key in extra quotes. After saving, Render redeploys 
 
 Verify: `GET /api/health/ready` should return `{"success":true,"status":"ready"}`.
 
+### Enable Firestore (fixes `PERMISSION_DENIED` / Cloud Firestore API)
+
+If Render logs show `Cloud Firestore API has not been used in project ... or it is disabled`:
+
+1. [Firebase Console](https://console.firebase.google.com/project/nexora-28cf4/firestore) → **Build** → **Firestore Database** → **Create database**
+2. Choose **Production mode** (rules are in `firestore.rules`) and a region (e.g. `us-central1`)
+3. If needed, enable the API: [Cloud Firestore API](https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=nexora-28cf4) → **Enable**
+4. Wait 2–5 minutes, then hit `/api/health/ready` again
+
+Also deploy Firestore rules from the repo:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
 ## 2. Configure GitHub Secrets
 
 | Secret | Value |

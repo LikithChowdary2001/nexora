@@ -25,16 +25,25 @@ export async function authenticate(
     const decoded = await getAuth().verifyIdToken(token);
     req.uid = decoded.uid;
 
-    const userDoc = await getFirestore().collection('users').doc(decoded.uid).get();
-    if (userDoc.exists) {
-      req.user = userDoc.data() as UserProfile;
+    try {
+      const userDoc = await getFirestore().collection('users').doc(decoded.uid).get();
+      if (userDoc.exists) {
+        req.user = userDoc.data() as UserProfile;
+      }
+    } catch (error) {
+      logger.warn('Authenticated but Firestore profile lookup failed', {
+        uid: decoded.uid,
+        message: error instanceof Error ? error.message : 'unknown',
+        code: (error as { code?: string | number }).code,
+        projectId: config.firebase.projectId,
+      });
     }
 
     next();
   } catch (error) {
     logger.warn('Token verification failed', {
       message: error instanceof Error ? error.message : 'unknown',
-      code: (error as { code?: string }).code,
+      code: (error as { code?: string | number }).code,
       projectId: config.firebase.projectId,
     });
     res.status(401).json({ success: false, error: 'Invalid token' });
