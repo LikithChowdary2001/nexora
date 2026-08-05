@@ -11,6 +11,8 @@ import {
 import { auth } from '@/lib/firebase';
 import api from '@/lib/api';
 import { loadProfileFromFirestore } from '@/lib/profile-fallback';
+import { saveProfileLocally, loadProfileLocally, clearProfileLocally } from '@/lib/profile-storage';
+import { setClientProfile } from '@/lib/client-profile';
 import type { UserProfile } from '@nexora/shared';
 
 interface AuthContextType {
@@ -34,19 +36,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const applyProfile = (profile: UserProfile) => {
     setProfile(profile);
+    setClientProfile(profile);
+    saveProfileLocally(profile);
   };
 
   const refreshProfile = async () => {
     const uid = auth.currentUser?.uid;
     if (!uid) {
       setProfile(null);
+      setClientProfile(null);
       return;
+    }
+
+    const cached = loadProfileLocally(uid);
+    if (cached) {
+      setProfile(cached);
+      setClientProfile(cached);
     }
 
     try {
       const { data } = await api.get('/users/profile');
       if (data.success) {
-        setProfile(data.data);
+        applyProfile(data.data);
         return;
       }
     } catch {
@@ -57,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await api.post('/users/bootstrap');
       const { data } = await api.get('/users/profile');
       if (data.success) {
-        setProfile(data.data);
+        applyProfile(data.data);
         return;
       }
     } catch {
@@ -66,19 +77,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const localProfile = await loadProfileFromFirestore(uid);
-      setProfile(localProfile);
+      if (localProfile) {
+        applyProfile(localProfile);
+        return;
+      }
     } catch {
-      setProfile(null);
+      // keep cached profile if any
     }
+
+    if (!cached) setProfile(null);
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
+        const cached = loadProfileLocally(firebaseUser.uid);
+        if (cached) {
+          setProfile(cached);
+          setClientProfile(cached);
+        }
         await refreshProfile();
       } else {
         setProfile(null);
+        setClientProfile(null);
       }
       setLoading(false);
     });
@@ -101,8 +123,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    const uid = auth.currentUser?.uid;
     await signOut(auth);
+    if (uid) clearProfileLocally(uid);
     setProfile(null);
+    setClientProfile(null);
   };
 
   const resetPassword = async (email: string) => {

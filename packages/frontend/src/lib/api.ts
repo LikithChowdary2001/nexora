@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { auth } from './firebase';
+import { getClientProfile, encodeClientProfile } from './client-profile';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -11,6 +12,11 @@ api.interceptors.request.use(async (config) => {
   if (user) {
     const token = await user.getIdToken();
     config.headers.Authorization = `Bearer ${token}`;
+
+    const profile = getClientProfile();
+    if (profile?.uid === user.uid) {
+      config.headers['X-Client-Profile'] = encodeClientProfile(profile);
+    }
   }
   return config;
 });

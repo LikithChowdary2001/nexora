@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { getAuth, getFirestore } from '../firebase/index.js';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { parseClientProfileHeader } from '../utils/client-profile.js';
 import type { UserProfile } from '@nexora/shared';
 
 export interface AuthenticatedRequest extends Request {
@@ -15,24 +16,63 @@ async function loadProfileFromFirestore(uid: string): Promise<UserProfile | null
   return userDoc.data() as UserProfile;
 }
 
+async function buildMinimalProfile(uid: string): Promise<UserProfile | null> {
+  try {
+    const authUser = await getAuth().getUser(uid);
+    const now = new Date().toISOString();
+    return {
+      uid,
+      email: authUser.email ?? '',
+      firstName: '',
+      lastName: '',
+      age: 25,
+      country: 'United States',
+      language: 'en',
+      profession: 'Other',
+      interests: ['Technology', 'World News'],
+      customInterests: [],
+      role: 'user',
+      emailVerified: authUser.emailVerified,
+      onboardingCompleted: true,
+      timezone: 'UTC',
+      createdAt: now,
+      updatedAt: now,
+      lastLogin: now,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Load req.user from Firestore when the token is valid but profile was not attached yet. */
 export async function resolveUserProfile(req: AuthenticatedRequest): Promise<UserProfile | null> {
   if (req.user) return req.user;
   if (!req.uid) return null;
 
+  const clientProfile = parseClientProfileHeader(req);
+  if (clientProfile) {
+    req.user = clientProfile;
+    return clientProfile;
+  }
+
   try {
     const profile = await loadProfileFromFirestore(req.uid);
-    if (profile) req.user = profile;
-    return profile;
+    if (profile) {
+      req.user = profile;
+      return profile;
+    }
   } catch (error) {
-    logger.warn('Failed to resolve user profile', {
+    logger.warn('Failed to resolve user profile from Firestore', {
       uid: req.uid,
       message: error instanceof Error ? error.message : 'unknown',
       code: (error as { code?: string | number }).code,
       projectId: config.firebase.projectId,
     });
-    return null;
   }
+
+  const minimal = await buildMinimalProfile(req.uid);
+  if (minimal) req.user = minimal;
+  return minimal;
 }
 
 export async function requireProfile(
@@ -76,6 +116,11 @@ export async function authenticate(
         code: (error as { code?: string | number }).code,
         projectId: config.firebase.projectId,
       });
+    }
+
+    if (!req.user) {
+      const clientProfile = parseClientProfileHeader(req);
+      if (clientProfile) req.user = clientProfile;
     }
 
     next();

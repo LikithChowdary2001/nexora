@@ -22,6 +22,17 @@ export function AIAssistant() {
       });
       return data.data;
     },
+    onError: () => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-error`,
+          role: 'assistant',
+          content: 'Sorry, I could not respond right now. Please try again in a moment.',
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    },
     onSuccess: (response) => {
       setMessages((prev) => [
         ...prev,

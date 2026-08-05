@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 import { z } from 'zod';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
-import { ValidationError, NotFoundError } from '../utils/errors.js';
+import { ValidationError, NotFoundError, ServiceUnavailableError, isFirestoreUnavailableError } from '../utils/errors.js';
 import { sendSuccess } from '../utils/response.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { config } from '../config/index.js';
@@ -25,44 +25,63 @@ export class UserController {
   async bootstrap(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (!req.uid) throw new ValidationError('Unauthorized');
 
-    const existing = await userRepository.findByUid(req.uid);
-    if (existing) {
-      sendSuccess(res, existing);
-      return;
+    try {
+      const existing = await userRepository.findByUid(req.uid);
+      if (existing) {
+        sendSuccess(res, existing);
+        return;
+      }
+
+      const authUser = await getAuth().getUser(req.uid);
+      const now = new Date().toISOString();
+      const email = authUser.email ?? '';
+      const isAdmin = !!config.adminEmail && email === config.adminEmail;
+
+      const profile = await userRepository.upsert(req.uid, {
+        uid: req.uid,
+        email,
+        firstName: '',
+        lastName: '',
+        age: 0,
+        country: '',
+        language: 'en',
+        profession: '',
+        role: isAdmin ? 'admin' : 'user',
+        emailVerified: authUser.emailVerified,
+        onboardingCompleted: false,
+        interests: [],
+        customInterests: [],
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        createdAt: now,
+        lastLogin: now,
+      });
+
+      sendSuccess(res, profile, 201);
+    } catch (error) {
+      if (isFirestoreUnavailableError(error)) {
+        throw new ServiceUnavailableError(
+          'Firestore is not enabled. Create a Firestore database in Firebase Console.'
+        );
+      }
+      throw error;
     }
-
-    const authUser = await getAuth().getUser(req.uid);
-    const now = new Date().toISOString();
-    const email = authUser.email ?? '';
-    const isAdmin = !!config.adminEmail && email === config.adminEmail;
-
-    const profile = await userRepository.upsert(req.uid, {
-      uid: req.uid,
-      email,
-      firstName: '',
-      lastName: '',
-      age: 0,
-      country: '',
-      language: 'en',
-      profession: '',
-      role: isAdmin ? 'admin' : 'user',
-      emailVerified: authUser.emailVerified,
-      onboardingCompleted: false,
-      interests: [],
-      customInterests: [],
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-      createdAt: now,
-      lastLogin: now,
-    });
-
-    sendSuccess(res, profile, 201);
   }
 
   async getProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (!req.uid) throw new ValidationError('Unauthorized');
-    const profile = await userRepository.findByUid(req.uid);
-    if (!profile) throw new NotFoundError('Profile not found');
-    sendSuccess(res, profile);
+
+    try {
+      const profile = await userRepository.findByUid(req.uid);
+      if (!profile) throw new NotFoundError('Profile not found');
+      sendSuccess(res, profile);
+    } catch (error) {
+      if (isFirestoreUnavailableError(error)) {
+        throw new ServiceUnavailableError(
+          'Firestore is not enabled. Create a Firestore database in Firebase Console.'
+        );
+      }
+      throw error;
+    }
   }
 
   async completeOnboarding(req: AuthenticatedRequest, res: Response): Promise<void> {

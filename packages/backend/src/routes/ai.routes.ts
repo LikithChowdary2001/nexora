@@ -8,6 +8,7 @@ import { chatWithAssistant } from '../services/ai.service.js';
 import { fetchNewsFromAllProviders } from '../services/news.service.js';
 import { aiChatRepository } from '../repositories/aiChat.repository.js';
 import { sendSuccess } from '../utils/response.js';
+import { logger } from '../utils/logger.js';
 import type { SupportedLanguage } from '@nexora/shared';
 
 const router = Router();
@@ -51,24 +52,31 @@ router.post('/chat', aiRateLimiter, authenticate, requireProfile, asyncHandler(a
   };
 
   let activeSessionId = sessionId;
-  if (activeSessionId) {
-    const session = await aiChatRepository.findById(activeSessionId);
-    if (!session || session.userId !== uid) {
-      activeSessionId = undefined;
+  try {
+    if (activeSessionId) {
+      const session = await aiChatRepository.findById(activeSessionId);
+      if (!session || session.userId !== uid) {
+        activeSessionId = undefined;
+      }
     }
-  }
 
-  if (!activeSessionId) {
-    activeSessionId = await aiChatRepository.createSession(
+    if (!activeSessionId) {
+      activeSessionId = await aiChatRepository.createSession(
+        uid,
+        message.slice(0, 80) || 'Chat session'
+      );
+    }
+
+    await aiChatRepository.addMessage(activeSessionId, userMessage);
+    await aiChatRepository.addMessage(activeSessionId, assistantMessage);
+  } catch (error) {
+    logger.warn('AI chat history not saved (Firestore may be unavailable)', {
       uid,
-      message.slice(0, 80) || 'Chat session'
-    );
+      message: error instanceof Error ? error.message : 'unknown',
+    });
   }
 
-  await aiChatRepository.addMessage(activeSessionId, userMessage);
-  await aiChatRepository.addMessage(activeSessionId, assistantMessage);
-
-  sendSuccess(res, { ...response, sessionId: activeSessionId });
+  sendSuccess(res, { ...response, sessionId: activeSessionId ?? null });
 }));
 
 export default router;
