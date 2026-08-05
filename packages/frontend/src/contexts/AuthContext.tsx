@@ -22,6 +22,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  applyProfile: (profile: UserProfile) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -30,6 +31,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const applyProfile = (profile: UserProfile) => {
+    setProfile(profile);
+  };
 
   const refreshProfile = async () => {
     const uid = auth.currentUser?.uid;
@@ -105,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, logout, resetPassword, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, logout, resetPassword, refreshProfile, applyProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { authenticate, type AuthenticatedRequest } from '../middleware/auth.middleware.js';
+import { authenticate, requireProfile, type AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { aiRateLimiter } from '../middleware/rateLimit.middleware.js';
 import { asyncHandler } from '../middleware/error.middleware.js';
 import { chatWithAssistant } from '../services/ai.service.js';
 import { fetchNewsFromAllProviders } from '../services/news.service.js';
 import { aiChatRepository } from '../repositories/aiChat.repository.js';
-import { sendSuccess, sendError } from '../utils/response.js';
+import { sendSuccess } from '../utils/response.js';
 import type { SupportedLanguage } from '@nexora/shared';
 
 const router = Router();
@@ -19,27 +19,25 @@ const chatSchema = z.object({
   sessionId: z.string().optional(),
 });
 
-router.post('/chat', aiRateLimiter, authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  if (!req.user || !req.uid) {
-    sendError(res, 'Unauthorized', 401);
-    return;
-  }
+router.post('/chat', aiRateLimiter, authenticate, requireProfile, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const user = req.user!;
+  const uid = req.uid!;
 
   const { message, articleIds, language, sessionId } = chatSchema.parse(req.body);
-  const lang = (language || req.user.language || 'en') as SupportedLanguage;
+  const lang = (language || user.language || 'en') as SupportedLanguage;
 
   let articles = [];
   if (articleIds?.length) {
-    const feed = await fetchNewsFromAllProviders('', req.user);
+    const feed = await fetchNewsFromAllProviders('', user);
     articles = feed.filter((a) => articleIds.includes(a.id));
   } else {
-    articles = (await fetchNewsFromAllProviders('latest news', req.user)).slice(0, 10);
+    articles = (await fetchNewsFromAllProviders('latest news', user)).slice(0, 10);
   }
 
   const response = await chatWithAssistant(
     { message, articleIds, language: lang },
     articles,
-    req.user
+    user
   );
 
   const now = new Date().toISOString();
@@ -55,14 +53,14 @@ router.post('/chat', aiRateLimiter, authenticate, asyncHandler(async (req: Authe
   let activeSessionId = sessionId;
   if (activeSessionId) {
     const session = await aiChatRepository.findById(activeSessionId);
-    if (!session || session.userId !== req.uid) {
+    if (!session || session.userId !== uid) {
       activeSessionId = undefined;
     }
   }
 
   if (!activeSessionId) {
     activeSessionId = await aiChatRepository.createSession(
-      req.uid,
+      uid,
       message.slice(0, 80) || 'Chat session'
     );
   }

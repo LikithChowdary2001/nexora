@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, type AuthenticatedRequest } from '../middleware/auth.middleware.js';
+import { authenticate, requireProfile, type AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { asyncHandler } from '../middleware/error.middleware.js';
 import {
   fetchPersonalizedFeed,
@@ -13,9 +13,8 @@ import type { SupportedLanguage } from '@nexora/shared';
 
 const router = Router();
 
-router.get('/feed', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  if (!req.user) throw new ValidationError('Unauthorized');
-  const articles = await fetchPersonalizedFeed(req.user);
+router.get('/feed', authenticate, requireProfile, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const articles = await fetchPersonalizedFeed(req.user!);
   sendSuccess(res, articles);
 }));
 
@@ -24,11 +23,10 @@ router.get('/trending', authenticate, asyncHandler(async (_req, res) => {
   sendSuccess(res, articles);
 }));
 
-router.get('/briefing', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  if (!req.user) throw new ValidationError('Unauthorized');
-  const language = (req.query.language as SupportedLanguage) || req.user.language || 'en';
-  const articles = await fetchPersonalizedFeed(req.user);
-  const briefing = await generateBriefing(articles, req.user, language);
+router.get('/briefing', authenticate, requireProfile, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const language = (req.query.language as SupportedLanguage) || req.user!.language || 'en';
+  const articles = await fetchPersonalizedFeed(req.user!);
+  const briefing = await generateBriefing(articles, req.user!, language);
   sendSuccess(res, briefing);
 }));
 

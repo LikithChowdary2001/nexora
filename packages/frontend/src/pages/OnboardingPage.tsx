@@ -18,7 +18,7 @@ import {
   COUNTRIES, PROFESSIONS, LANGUAGE_NAMES, SUPPORTED_LANGUAGES,
   INTEREST_CATEGORIES, recommendInterests, type SupportedLanguage,
 } from '@nexora/shared';
-import { saveOnboardingToFirestore } from '@/lib/onboarding-fallback';
+import { saveOnboardingToFirestore, buildProfileFromOnboarding } from '@/lib/onboarding-fallback';
 
 const STEPS = [
   { id: 'welcome', icon: Sparkles, title: 'Welcome to Nexora' },
@@ -34,7 +34,7 @@ const STEPS = [
 
 export function OnboardingPage() {
   const { i18n } = useTranslation();
-  const { user, refreshProfile } = useAuth();
+  const { user, refreshProfile, applyProfile } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -127,11 +127,16 @@ export function OnboardingPage() {
       customInterests: form.customInterests,
     };
 
+    let completedProfile = buildProfileFromOnboarding(user, payload);
+
     try {
-      await api.post('/users/onboarding', payload);
+      const { data } = await api.post('/users/onboarding', payload);
+      if (data.success && data.data) {
+        completedProfile = data.data;
+      }
     } catch {
       try {
-        await saveOnboardingToFirestore(user, payload);
+        completedProfile = await saveOnboardingToFirestore(user, payload);
       } catch {
         setError('Could not save your profile. Check your connection and try again.');
         setLoading(false);
@@ -139,15 +144,21 @@ export function OnboardingPage() {
       }
     }
 
-    try {
-      i18n.changeLanguage(form.language);
-      await refreshProfile();
-      setStep(STEPS.length - 1);
-      setTimeout(() => navigate('/'), 2000);
-    } catch {
-      setError('Profile saved, but refresh failed. Try reloading the page.');
-      setLoading(false);
-    }
+    applyProfile(completedProfile);
+    i18n.changeLanguage(form.language);
+    setStep(STEPS.length - 1);
+    setLoading(false);
+
+    // Refresh in background; don't block redirect
+    refreshProfile().catch(() => {});
+
+    window.setTimeout(() => {
+      navigate('/', { replace: true });
+    }, 1500);
+  };
+
+  const goHome = () => {
+    navigate('/', { replace: true });
   };
 
   const greeting = form.firstName ? getLocalGreeting(form.firstName).greeting : '';
@@ -331,7 +342,10 @@ export function OnboardingPage() {
                 >
                   <PartyPopper className="h-16 w-16 text-primary mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">Welcome, {form.firstName}!</h3>
-                  <p className="text-muted-foreground">Your personalized news feed is ready. Redirecting...</p>
+                  <p className="text-muted-foreground mb-6">Your personalized news feed is ready. Redirecting...</p>
+                  <Button variant="gradient" className="rounded-button" onClick={goHome}>
+                    Continue to Home
+                  </Button>
                 </motion.div>
               )}
 

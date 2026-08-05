@@ -52,6 +52,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function OnboardingRoute() {
+  const { user, profile, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (profile?.onboardingCompleted) return <Navigate to="/" replace />;
+  return <OnboardingPage />;
+}
+
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
   if (profile?.role !== 'admin') return <Navigate to="/" replace />;
@@ -67,7 +75,7 @@ function AppRoutes() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
-          <Route path="/onboarding" element={user ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+          <Route path="/onboarding" element={<OnboardingRoute />} />
           <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
           <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
           <Route path="/news/:id" element={<ProtectedRoute><NewsDetailPage /></ProtectedRoute>} />
