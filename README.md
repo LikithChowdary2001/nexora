@@ -18,20 +18,28 @@ nexora/
 └── .github/workflows/   # CI/CD pipeline
 ```
 
+
+
 ### Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
+
+| Layer    | Technology                                                                        |
+| -------- | --------------------------------------------------------------------------------- |
 | Frontend | React, Vite, TypeScript, Tailwind CSS, ShadCN UI, Framer Motion, React Query, PWA |
-| Backend | Node.js, Express, TypeScript, Firebase Admin SDK |
-| Database | Firebase Firestore |
-| Auth | Firebase Authentication |
-| Storage | Firebase Storage |
-| AI | OpenAI GPT-4o |
-| Hosting | Firebase Hosting |
-| CI/CD | GitHub Actions |
+| Backend  | Node.js, Express, TypeScript, Firebase Admin SDK                                  |
+| Database | Firebase Firestore                                                                |
+| Auth     | Firebase Authentication                                                           |
+| Storage  | Firebase Storage                                                                  |
+| AI       | OpenAI GPT-4o                                                                     |
+| Hosting  | Firebase Hosting                                                                  |
+| CI/CD    | GitHub Actions                                                                    |
+
+
+
 
 ## Quick Start
+
+
 
 ### Prerequisites
 
@@ -39,6 +47,8 @@ nexora/
 - Firebase project with Auth, Firestore, Storage, Hosting enabled
 - OpenAI API key
 - NewsAPI and/or GNews API keys (optional)
+
+
 
 ### Setup
 
@@ -59,8 +69,8 @@ npm run build -w @nexora/shared
 npm run dev
 ```
 
-Frontend: http://localhost:5173  
-Backend API: http://localhost:3001/api
+Frontend: [http://localhost:5173](http://localhost:5173)  
+Backend API: [http://localhost:3001/api](http://localhost:3001/api)
 
 ### Firebase Setup
 
@@ -71,21 +81,27 @@ firebase use <your-project-id>
 firebase deploy
 ```
 
+
+
 ## Environment Variables
 
 See `.env.example` for the complete list. Key variables:
 
-| Variable | Description |
-|----------|-------------|
-| `VITE_FIREBASE_*` | Firebase client config (frontend) |
-| `FIREBASE_PROJECT_ID` | Firebase Admin project ID |
-| `FIREBASE_CLIENT_EMAIL` | Service account email |
-| `FIREBASE_PRIVATE_KEY` | Service account private key |
-| `OPENAI_API_KEY` | OpenAI API key |
-| `NEWSAPI_KEY` | NewsAPI.org key |
-| `GNEWS_API_KEY` | GNews API key |
-| `ADMIN_EMAIL` | Admin dashboard access email |
-| `SMTP_*` | Email digest configuration |
+
+| Variable                | Description                       |
+| ----------------------- | --------------------------------- |
+| `VITE_FIREBASE_*`       | Firebase client config (frontend) |
+| `FIREBASE_PROJECT_ID`   | Firebase Admin project ID         |
+| `FIREBASE_CLIENT_EMAIL` | Service account email             |
+| `FIREBASE_PRIVATE_KEY`  | Service account private key       |
+| `OPENAI_API_KEY`        | OpenAI API key                    |
+| `NEWSAPI_KEY`           | NewsAPI.org key                   |
+| `GNEWS_API_KEY`         | GNews API key                     |
+| `ADMIN_EMAIL`           | Admin dashboard access email      |
+| `SMTP_*`                | Email digest configuration        |
+
+
+
 
 ## Features
 
@@ -102,19 +118,25 @@ See `.env.example` for the complete list. Key variables:
 - **PWA** — Offline support, installable app
 - **Dark/Light Mode** — Theme switching
 
+
+
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/users/profile` | Get user profile |
-| POST | `/api/users/onboarding` | Complete onboarding |
-| GET | `/api/news/feed` | Personalized feed |
-| GET | `/api/news/briefing` | AI daily briefing |
-| POST | `/api/search` | Search with AI summary |
-| POST | `/api/ai/chat` | AI assistant chat |
-| GET | `/api/bookmarks` | List bookmarks |
-| GET | `/api/admin/analytics` | Admin analytics |
+
+| Method | Endpoint                | Description            |
+| ------ | ----------------------- | ---------------------- |
+| GET    | `/api/health`           | Health check           |
+| GET    | `/api/users/profile`    | Get user profile       |
+| POST   | `/api/users/onboarding` | Complete onboarding    |
+| GET    | `/api/news/feed`        | Personalized feed      |
+| GET    | `/api/news/briefing`    | AI daily briefing      |
+| POST   | `/api/search`           | Search with AI summary |
+| POST   | `/api/ai/chat`          | AI assistant chat      |
+| GET    | `/api/bookmarks`        | List bookmarks         |
+| GET    | `/api/admin/analytics`  | Admin analytics        |
+
+
+
 
 ## Deployment
 
@@ -126,15 +148,19 @@ Required GitHub Secrets: `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_PROJECT_ID`, `ADM
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [SETUP.md](./SETUP.md) | Local development setup |
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment |
-| [docs/API.md](./docs/API.md) | API reference |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System architecture |
-| [docs/PRODUCTION_READINESS_REPORT.md](./docs/PRODUCTION_READINESS_REPORT.md) | Launch audit report |
-| [SECURITY.md](./SECURITY.md) | Security policy |
-| [CHANGELOG.md](./CHANGELOG.md) | Version history |
+
+| Document                                                                     | Description             |
+| ---------------------------------------------------------------------------- | ----------------------- |
+| [SETUP.md](./SETUP.md)                                                       | Local development setup |
+| [DEPLOYMENT.md](./DEPLOYMENT.md)                                             | Production deployment   |
+| [docs/API.md](./docs/API.md)                                                 | API reference           |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)                               | System architecture     |
+| [docs/PRODUCTION_READINESS_REPORT.md](./docs/PRODUCTION_READINESS_REPORT.md) | Launch audit report     |
+| [SECURITY.md](./SECURITY.md)                                                 | Security policy         |
+| [CHANGELOG.md](./CHANGELOG.md)                                               | Version history         |
+
+
+
 
 ## Security
 
@@ -144,6 +170,15 @@ Required GitHub Secrets: `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_PROJECT_ID`, `ADM
 - HTTPS enforced via Firebase Hosting headers
 - No secrets in source code — all via environment variables
 
+
+
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+# MIT — see [LICENSE](./LICENSE).
+
+
+
+# nexora
+
+> > > > > > > 19770aef00a204d9f1892c5b9d78da00b767bce8
+
