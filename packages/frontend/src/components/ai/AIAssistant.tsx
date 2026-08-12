@@ -7,27 +7,57 @@ import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import type { AIAssistantMessage } from '@nexora/shared';
 
+const AI_TIMEOUT_MS = 120_000;
+
 export function AIAssistant() {
   const { profile } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<AIAssistantMessage[]>([]);
   const [input, setInput] = useState('');
+  const [slowHint, setSlowHint] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const slowTimerRef = useRef<number | null>(null);
+
+  const clearSlowTimer = () => {
+    if (slowTimerRef.current !== null) {
+      window.clearTimeout(slowTimerRef.current);
+      slowTimerRef.current = null;
+    }
+    setSlowHint('');
+  };
 
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
-      const { data } = await api.post('/ai/chat', {
-        message,
-        language: profile?.language || 'en',
-      });
-      return data.data;
+      slowTimerRef.current = window.setTimeout(() => {
+        setSlowHint('Server is waking up — this can take up to a minute on free tier…');
+      }, 5000);
+
+      try {
+        const { data } = await api.post(
+          '/ai/chat',
+          { message, language: profile?.language || 'en' },
+          { timeout: AI_TIMEOUT_MS }
+        );
+        if (!data?.success) {
+          throw new Error(data?.error || 'AI request failed');
+        }
+        if (!data?.data?.message) {
+          throw new Error('Empty response from AI');
+        }
+        return data.data;
+      } finally {
+        clearSlowTimer();
+      }
     },
     onError: (err: unknown) => {
-      const axiosErr = err as { response?: { data?: { error?: string; code?: string } } };
+      clearSlowTimer();
+      const axiosErr = err as { response?: { data?: { error?: string; code?: string } }; code?: string; message?: string };
       const serverMsg = axiosErr.response?.data?.error;
       const code = axiosErr.response?.data?.code;
       let content = 'Sorry, I could not respond right now. Please try again in a moment.';
-      if (code === 'AI_NOT_CONFIGURED') {
+      if (axiosErr.code === 'ECONNABORTED' || axiosErr.message?.includes('timeout')) {
+        content = 'Request timed out. The server may still be waking up — please try again.';
+      } else if (code === 'AI_NOT_CONFIGURED') {
         content = 'AI assistant is not configured on the server yet (OPENAI_API_KEY missing on Render).';
       } else if (serverMsg) {
         content = serverMsg;
@@ -58,7 +88,9 @@ export function AIAssistant() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, slowHint]);
+
+  useEffect(() => () => clearSlowTimer(), []);
 
   const handleSend = () => {
     if (!input.trim() || chatMutation.isPending) return;
@@ -73,6 +105,18 @@ export function AIAssistant() {
     setMessages((prev) => [...prev, userMessage]);
     chatMutation.mutate(input.trim());
     setInput('');
+  };
+
+  const sendSuggestion = (text: string) => {
+    if (chatMutation.isPending) return;
+    const userMessage: AIAssistantMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: text,
+      timestamp: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    chatMutation.mutate(text);
   };
 
   const suggestions = [
@@ -121,7 +165,8 @@ export function AIAssistant() {
                   {suggestions.map((s) => (
                     <button
                       key={s}
-                      onClick={() => { setInput(s); }}
+                      type="button"
+                      onClick={() => sendSuggestion(s)}
                       className="w-full text-left text-sm p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                     >
                       {s}
@@ -136,7 +181,7 @@ export function AIAssistant() {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
                       msg.role === 'user'
                         ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white'
                         : 'bg-muted'
@@ -148,10 +193,14 @@ export function AIAssistant() {
               ))}
 
               {chatMutation.isPending && (
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-2xl px-4 py-2.5">
+                <div className="flex flex-col gap-2 items-start">
+                  <div className="bg-muted rounded-2xl px-4 py-2.5 flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm text-muted-foreground">Thinking…</span>
                   </div>
+                  {slowHint && (
+                    <p className="text-xs text-muted-foreground px-1">{slowHint}</p>
+                  )}
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -165,6 +214,7 @@ export function AIAssistant() {
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Ask anything about the news..."
                   className="flex-1 h-10 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  disabled={chatMutation.isPending}
                 />
                 <Button size="icon" variant="gradient" onClick={handleSend} disabled={chatMutation.isPending}>
                   <Send className="h-4 w-4" />

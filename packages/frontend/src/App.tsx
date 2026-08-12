@@ -22,7 +22,13 @@ const OfflinePage = lazy(() => import('@/pages/ErrorPages').then((m) => ({ defau
 const AIAssistant = lazy(() => import('@/components/ai/AIAssistant').then((m) => ({ default: m.AIAssistant })));
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
 });
 
 function PageLoader() {

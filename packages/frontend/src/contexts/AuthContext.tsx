@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         const cached = loadProfileLocally(firebaseUser.uid);
@@ -105,12 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(cached);
           setClientProfile(cached);
         }
-        await refreshProfile();
+        // Don't block the UI on slow/failing profile API calls
+        setLoading(false);
+        void refreshProfile();
       } else {
         setProfile(null);
         setClientProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return unsubscribe;
   }, []);

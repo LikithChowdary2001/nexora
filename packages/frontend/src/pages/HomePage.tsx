@@ -9,6 +9,7 @@ import { NewsCard } from '@/components/news/NewsCard';
 import { NewsCardSkeleton, BriefingSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import api from '@/lib/api';
+import { safeGet } from '@/lib/safe-api';
 import type { NewsArticle, AIBriefing } from '@nexora/shared';
 
 const QUICK_SUGGESTIONS = [
@@ -21,23 +22,35 @@ export function HomePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: feed = [], isLoading: feedLoading } = useQuery<NewsArticle[]>({
-    queryKey: ['feed'], queryFn: async () => (await api.get('/news/feed')).data.data ?? [],
+  const { data: feed = [], isLoading: feedLoading, isError: feedError } = useQuery<NewsArticle[]>({
+    queryKey: ['feed'],
+    queryFn: () => safeGet<NewsArticle[]>('/news/feed', []),
+    retry: 1,
   });
   const { data: trending = [], isLoading: trendingLoading } = useQuery<NewsArticle[]>({
-    queryKey: ['trending'], queryFn: async () => (await api.get('/news/trending')).data.data ?? [],
+    queryKey: ['trending'],
+    queryFn: () => safeGet<NewsArticle[]>('/news/trending', []),
+    retry: 1,
   });
-  const { data: briefing, isLoading: briefingLoading } = useQuery<AIBriefing>({
-    queryKey: ['briefing'], queryFn: async () => (await api.get('/news/briefing')).data.data,
+  const { data: briefing, isLoading: briefingLoading } = useQuery<AIBriefing | null>({
+    queryKey: ['briefing'],
+    queryFn: () => safeGet<AIBriefing | null>('/news/briefing', null, 120_000),
+    retry: 0,
   });
-  const { data: bookmarks = [] } = useQuery({
-    queryKey: ['bookmarks'], queryFn: async () => (await api.get('/bookmarks')).data.data ?? [],
+  const { data: bookmarks = [] } = useQuery<{ id: string; articleId: string; article: NewsArticle }[]>({
+    queryKey: ['bookmarks'],
+    queryFn: () => safeGet('/bookmarks', []),
+    retry: 0,
   });
-  const { data: continueReading = [] } = useQuery({
-    queryKey: ['continue-reading'], queryFn: async () => (await api.get('/news/continue-reading')).data.data ?? [],
+  const { data: continueReading = [] } = useQuery<{ id: string; article: NewsArticle }[]>({
+    queryKey: ['continue-reading'],
+    queryFn: () => safeGet('/news/continue-reading', []),
+    retry: 0,
   });
-  const { data: searchHistory = [] } = useQuery({
-    queryKey: ['search-history'], queryFn: async () => (await api.get('/search/history')).data.data ?? [],
+  const { data: searchHistory = [] } = useQuery<{ id: string; query: string }[]>({
+    queryKey: ['search-history'],
+    queryFn: () => safeGet('/search/history', []),
+    retry: 0,
   });
 
   const bookmarkMutation = useMutation({
@@ -48,7 +61,7 @@ export function HomePage() {
     mutationFn: async (article: NewsArticle) => { await api.post('/news/read', { article }); },
   });
 
-  const bookmarkedIds = new Set(bookmarks.map((b: { articleId: string }) => b.articleId));
+  const bookmarkedIds = new Set(bookmarks.map((b) => b.articleId));
 
   return (
     <AppLayout showGreeting>
@@ -121,7 +134,7 @@ export function HomePage() {
               {[...Array(6)].map((_, i) => <NewsCardSkeleton key={i} />)}
             </div>
           ) : feed.length === 0 ? (
-            <EmptyState icon={Sparkles} title="No recommendations yet" description="Complete your profile to get personalized news." actionLabel="Update Profile" onAction={() => navigate('/profile')} />
+            <EmptyState icon={Sparkles} title={feedError ? 'Could not load feed' : 'No recommendations yet'} description={feedError ? 'The server may be waking up — try refreshing in a moment.' : 'Complete your profile to get personalized news.'} actionLabel="Update Profile" onAction={() => navigate('/profile')} />
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {feed.slice(0, 9).map((article, i) => (
@@ -165,7 +178,7 @@ export function HomePage() {
                 <button onClick={() => navigate('/bookmarks')} className="text-sm text-primary flex items-center gap-1 hover:underline">View all <ArrowRight className="h-3 w-3" /></button>
               </div>
               <div className="space-y-3">
-                {bookmarks.slice(0, 4).map((b: { id: string; article: NewsArticle }) => (
+                {bookmarks.slice(0, 4).map((b) => (
                   <NewsCard key={b.id} article={b.article} compact onRead={() => navigate(`/news/${b.article.id}`)} />
                 ))}
               </div>
@@ -175,7 +188,7 @@ export function HomePage() {
             <section>
               <h2 className="text-heading flex items-center gap-2 mb-4"><Clock className="h-5 w-5 text-primary" /> Continue Reading</h2>
               <div className="space-y-3">
-                {continueReading.slice(0, 4).map((e: { id: string; article: NewsArticle }) => (
+                {continueReading.slice(0, 4).map((e) => (
                   <NewsCard key={e.id} article={e.article} compact onRead={() => navigate(`/news/${e.article.id}`)} />
                 ))}
               </div>
@@ -187,7 +200,7 @@ export function HomePage() {
           <section>
             <h2 className="text-heading mb-4">{t('home.recentSearches')}</h2>
             <div className="flex flex-wrap gap-2">
-              {searchHistory.slice(0, 8).map((s: { id: string; query: string }) => (
+              {searchHistory.slice(0, 8).map((s) => (
                 <button key={s.id} onClick={() => navigate(`/search?q=${encodeURIComponent(s.query)}`)} className="px-4 py-2 rounded-2xl bg-muted text-sm hover:bg-primary/10 hover:text-primary transition-colors">{s.query}</button>
               ))}
             </div>
