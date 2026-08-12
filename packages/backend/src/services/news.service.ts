@@ -25,10 +25,24 @@ const rssParser = new Parser({
 
 const GOOGLE_NEWS_RSS = 'https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en';
 
+const RSS_TIMEOUT_MS = 12_000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function fetchGoogleNewsRss(query: string): Promise<NewsArticle[]> {
   try {
     const url = GOOGLE_NEWS_RSS.replace('{query}', encodeURIComponent(query));
-    const feed = await rssParser.parseURL(url);
+    const feed = await withTimeout(rssParser.parseURL(url), RSS_TIMEOUT_MS, 'Google News RSS');
 
     return (feed.items ?? []).map((item) => ({
       id: generateArticleId(item.link ?? item.guid ?? item.title ?? ''),
@@ -122,7 +136,15 @@ export async function rankArticles(
   user: UserProfile,
   trendingTopics: string[] = []
 ): Promise<NewsArticle[]> {
-  const history = await readingHistoryRepository.getUserHistory(user.uid, 100);
+  let history: Awaited<ReturnType<typeof readingHistoryRepository.getUserHistory>> = [];
+  try {
+    history = await readingHistoryRepository.getUserHistory(user.uid, 100);
+  } catch (error) {
+    logger.warn('Reading history unavailable — ranking without history', {
+      uid: user.uid,
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+  }
   return personalizationService.rankArticles(articles, user, trendingTopics, history);
 }
 
@@ -130,12 +152,19 @@ export async function fetchNewsFromAllProviders(
   query: string,
   user?: UserProfile
 ): Promise<NewsArticle[]> {
-  const cached = await newsCacheRepository.getValidCache(query);
-  if (cached) {
-    logger.debug('News cache hit', { query });
-    const articles = cached.articles;
-    if (user) return rankArticles(articles, user);
-    return articles;
+  try {
+    const cached = await newsCacheRepository.getValidCache(query);
+    if (cached) {
+      logger.debug('News cache hit', { query });
+      const articles = cached.articles;
+      if (user) return rankArticles(articles, user);
+      return articles;
+    }
+  } catch (error) {
+    logger.warn('News cache read failed — fetching fresh', {
+      query,
+      message: error instanceof Error ? error.message : 'unknown',
+    });
   }
 
   const results = await Promise.allSettled([
@@ -150,7 +179,15 @@ export async function fetchNewsFromAllProviders(
   }
 
   const deduped = deduplicateArticles(allArticles);
-  await newsCacheRepository.setCache(query, deduped);
+
+  try {
+    await newsCacheRepository.setCache(query, deduped);
+  } catch (error) {
+    logger.warn('News cache write failed — continuing without cache', {
+      query,
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+  }
 
   if (user) return rankArticles(deduped, user);
 
@@ -160,8 +197,15 @@ export async function fetchNewsFromAllProviders(
 }
 
 export async function fetchPersonalizedFeed(user: UserProfile): Promise<NewsArticle[]> {
-  const trending = await trendingTopicsRepository.getTop(10);
-  const trendingNames = trending.map((t) => t.topic);
+  let trendingNames: string[] = [];
+  try {
+    const trending = await trendingTopicsRepository.getTop(10);
+    trendingNames = trending.map((t) => t.topic);
+  } catch (error) {
+    logger.warn('Trending topics unavailable — using interests only', {
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+  }
 
   const queries = [
     ...user.interests.slice(0, 5),

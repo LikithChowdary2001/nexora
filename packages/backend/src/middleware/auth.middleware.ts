@@ -3,7 +3,21 @@ import { getAuth, getFirestore } from '../firebase/index.js';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { parseClientProfileHeader } from '../utils/client-profile.js';
+import { isFirestoreUnavailableError } from '../utils/errors.js';
 import type { UserProfile } from '@nexora/shared';
+
+let firestoreUnavailableLogged = false;
+
+function logFirestoreUnavailable(context: string, uid: string, error: unknown): void {
+  if (firestoreUnavailableLogged) return;
+  firestoreUnavailableLogged = true;
+  logger.warn(`${context} — Firestore unavailable; using client profile or auth fallback`, {
+    uid,
+    projectId: config.firebase.projectId,
+    message: error instanceof Error ? error.message : 'unknown',
+    hint: 'Enable Firestore: https://console.firebase.google.com/project/nexora-28cf4/firestore',
+  });
+}
 
 export interface AuthenticatedRequest extends Request {
   user?: UserProfile;
@@ -62,12 +76,16 @@ export async function resolveUserProfile(req: AuthenticatedRequest): Promise<Use
       return profile;
     }
   } catch (error) {
-    logger.warn('Failed to resolve user profile from Firestore', {
-      uid: req.uid,
-      message: error instanceof Error ? error.message : 'unknown',
-      code: (error as { code?: string | number }).code,
-      projectId: config.firebase.projectId,
-    });
+    if (isFirestoreUnavailableError(error)) {
+      logFirestoreUnavailable('Profile lookup', req.uid, error);
+    } else {
+      logger.warn('Failed to resolve user profile from Firestore', {
+        uid: req.uid,
+        message: error instanceof Error ? error.message : 'unknown',
+        code: (error as { code?: string | number }).code,
+        projectId: config.firebase.projectId,
+      });
+    }
   }
 
   const minimal = await buildMinimalProfile(req.uid);
@@ -110,12 +128,16 @@ export async function authenticate(
     try {
       req.user = (await loadProfileFromFirestore(decoded.uid)) ?? undefined;
     } catch (error) {
-      logger.warn('Authenticated but Firestore profile lookup failed', {
-        uid: decoded.uid,
-        message: error instanceof Error ? error.message : 'unknown',
-        code: (error as { code?: string | number }).code,
-        projectId: config.firebase.projectId,
-      });
+      if (isFirestoreUnavailableError(error)) {
+        logFirestoreUnavailable('Authenticated profile lookup', decoded.uid, error);
+      } else {
+        logger.warn('Authenticated but Firestore profile lookup failed', {
+          uid: decoded.uid,
+          message: error instanceof Error ? error.message : 'unknown',
+          code: (error as { code?: string | number }).code,
+          projectId: config.firebase.projectId,
+        });
+      }
     }
 
     if (!req.user) {

@@ -27,14 +27,24 @@ router.post('/chat', aiRateLimiter, authenticate, requireProfile, asyncHandler(a
   const { message, articleIds, language, sessionId } = chatSchema.parse(req.body);
   const lang = (language || user.language || 'en') as SupportedLanguage;
 
+  const NEWS_CONTEXT_TIMEOUT_MS = 10_000;
+
   let articles: Awaited<ReturnType<typeof fetchNewsFromAllProviders>> = [];
   try {
-    if (articleIds?.length) {
-      const feed = await fetchNewsFromAllProviders('', user);
-      articles = feed.filter((a) => articleIds.includes(a.id));
-    } else {
-      articles = (await fetchNewsFromAllProviders('latest news', user)).slice(0, 10);
-    }
+    const fetchArticles = async () => {
+      if (articleIds?.length) {
+        const feed = await fetchNewsFromAllProviders('', user);
+        return feed.filter((a) => articleIds.includes(a.id));
+      }
+      return (await fetchNewsFromAllProviders('latest news', user)).slice(0, 10);
+    };
+
+    articles = await Promise.race([
+      fetchArticles(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('News context fetch timed out')), NEWS_CONTEXT_TIMEOUT_MS)
+      ),
+    ]);
   } catch (error) {
     logger.warn('News fetch failed for AI chat — continuing without article context', {
       message: error instanceof Error ? error.message : 'unknown',

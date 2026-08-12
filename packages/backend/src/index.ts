@@ -30,6 +30,9 @@ void verifyFirebaseAdmin().then((ok) => {
 
 const app = express();
 
+// Render (and other reverse proxies) set X-Forwarded-For; required for express-rate-limit.
+app.set('trust proxy', config.env === 'production' ? 1 : false);
+
 app.use(helmet());
 app.use(compression());
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
