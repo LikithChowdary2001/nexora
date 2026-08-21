@@ -1,10 +1,18 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { authenticate, type AuthenticatedRequest } from '../middleware/auth.middleware.js';
+import {
+  authenticate,
+  requireProfile,
+  type AuthenticatedRequest,
+} from '../middleware/auth.middleware.js';
 import { searchRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { asyncHandler } from '../middleware/error.middleware.js';
 import { fetchNewsFromAllProviders } from '../services/news.service.js';
 import { summarizeArticles, generateRelatedSearches } from '../services/ai.service.js';
-import { getFirestore } from '../firebase/index.js';
+import { searchHistoryRepository } from '../repositories/index.js';
+import { sendSuccess } from '../utils/response.js';
+import { logger } from '../utils/logger.js';
+import { isFirestoreUnavailableError } from '../utils/errors.js';
 import type { SupportedLanguage } from '@nexora/shared';
 
 const router = Router();
@@ -14,82 +22,123 @@ const searchSchema = z.object({
   language: z.enum(['en', 'es', 'hi', 'te', 'fr', 'de', 'ja', 'zh']).optional(),
 });
 
-router.post('/', searchRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+async function saveSearchHistory(uid: string, query: string, resultCount: number): Promise<void> {
   try {
+    await searchHistoryRepository.create({
+      userId: uid,
+      query,
+      resultCount,
+      searchedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (isFirestoreUnavailableError(error)) {
+      logger.debug('Search history not saved — Firestore unavailable', { uid });
+      return;
+    }
+    logger.warn('Search history not saved', {
+      uid,
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+  }
+}
+
+router.post(
+  '/',
+  searchRateLimiter,
+  authenticate,
+  requireProfile,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { query, language } = searchSchema.parse(req.body);
-    const lang = (language || req.user?.language || 'en') as SupportedLanguage;
+    const lang = (language || req.user!.language || 'en') as SupportedLanguage;
 
-    const articles = await fetchNewsFromAllProviders(query, req.user);
-    const summary = await summarizeArticles(articles, query, lang);
-    const relatedSearches = await generateRelatedSearches(query, lang);
+    const articles = await fetchNewsFromAllProviders(query, req.user!);
 
-    if (req.uid) {
-      await getFirestore().collection('searchHistory').add({
-        userId: req.uid,
+    let summary = '';
+    try {
+      summary = articles.length > 0
+        ? await summarizeArticles(articles, query, lang)
+        : `No recent news found for "${query}". Try a broader search term.`;
+    } catch (error) {
+      logger.warn('Search summary unavailable', {
         query,
-        resultCount: articles.length,
-        searchedAt: new Date().toISOString(),
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+      summary = articles.length > 0
+        ? `Found ${articles.length} articles about "${query}". AI summary is temporarily unavailable.`
+        : `No recent news found for "${query}".`;
+    }
+
+    let relatedSearches: string[] = [];
+    try {
+      relatedSearches = await generateRelatedSearches(query, lang);
+    } catch (error) {
+      logger.warn('Related searches unavailable', {
+        query,
+        message: error instanceof Error ? error.message : 'unknown',
       });
     }
 
-    res.json({
-      success: true,
-      data: {
-        query,
-        summary,
-        articles: articles.slice(0, 20),
-        relatedSearches,
-        searchedAt: new Date().toISOString(),
-      },
+    if (req.uid) {
+      await saveSearchHistory(req.uid, query, articles.length);
+    }
+
+    sendSuccess(res, {
+      query,
+      summary,
+      articles: articles.slice(0, 20),
+      relatedSearches,
+      searchedAt: new Date().toISOString(),
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ success: false, error: error.errors[0]?.message });
-      return;
-    }
-    res.status(500).json({ success: false, error: 'Search failed' });
-  }
-});
+  })
+);
 
-router.get('/history', authenticate, async (req: AuthenticatedRequest, res) => {
-  try {
+router.get(
+  '/history',
+  authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     if (!req.uid) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
+      sendSuccess(res, []);
       return;
     }
 
-    const snapshot = await getFirestore()
-      .collection('searchHistory')
-      .where('userId', '==', req.uid)
-      .orderBy('searchedAt', 'desc')
-      .limit(20)
-      .get();
+    try {
+      const items = await searchHistoryRepository.getUserHistory(req.uid, 20);
+      sendSuccess(res, items);
+    } catch (error) {
+      if (isFirestoreUnavailableError(error)) {
+        sendSuccess(res, []);
+        return;
+      }
+      throw error;
+    }
+  })
+);
 
-    const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    res.json({ success: true, data: items });
-  } catch {
-    res.status(500).json({ success: false, error: 'Failed to fetch search history' });
-  }
-});
-
-router.delete('/history/:id', authenticate, async (req: AuthenticatedRequest, res) => {
-  try {
+router.delete(
+  '/history/:id',
+  authenticate,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
     if (!req.uid) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
+      sendSuccess(res, { deleted: false });
       return;
     }
 
-    const doc = await getFirestore().collection('searchHistory').doc(String(req.params.id)).get();
-    if (!doc.exists || doc.data()?.userId !== req.uid) {
-      res.status(404).json({ success: false, error: 'Not found' });
-      return;
+    try {
+      const entry = await searchHistoryRepository.findById(String(req.params.id));
+      if (!entry || entry.userId !== req.uid) {
+        sendSuccess(res, { deleted: false });
+        return;
+      }
+      await searchHistoryRepository.delete(String(req.params.id));
+      sendSuccess(res, { deleted: true });
+    } catch (error) {
+      if (isFirestoreUnavailableError(error)) {
+        sendSuccess(res, { deleted: false });
+        return;
+      }
+      throw error;
     }
-
-    await doc.ref.delete();
-    res.json({ success: true });
-  } catch {
-    res.status(500).json({ success: false, error: 'Failed to delete search history' });
-  }
-});
+  })
+);
 
 export default router;
