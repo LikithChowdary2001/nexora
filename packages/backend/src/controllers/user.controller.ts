@@ -1,7 +1,8 @@
 import type { Response } from 'express';
 import { z } from 'zod';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
-import { ValidationError, NotFoundError, ServiceUnavailableError, isFirestoreUnavailableError } from '../utils/errors.js';
+import { resolveUserProfile } from '../middleware/auth.middleware.js';
+import { ValidationError, NotFoundError, isFirestoreUnavailableError } from '../utils/errors.js';
 import { sendSuccess } from '../utils/response.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { config } from '../config/index.js';
@@ -75,16 +76,23 @@ export class UserController {
 
     try {
       const profile = await userRepository.findByUid(req.uid);
-      if (!profile) throw new NotFoundError('Profile not found');
-      sendSuccess(res, profile);
-    } catch (error) {
-      if (isFirestoreUnavailableError(error)) {
-        throw new ServiceUnavailableError(
-          'Firestore is not enabled. Profile is available from local device cache.'
-        );
+      if (profile) {
+        sendSuccess(res, profile);
+        return;
       }
-      throw error;
+    } catch (error) {
+      if (!isFirestoreUnavailableError(error)) {
+        throw error;
+      }
     }
+
+    const fallback = await resolveUserProfile(req);
+    if (fallback) {
+      sendSuccess(res, fallback);
+      return;
+    }
+
+    throw new NotFoundError('Profile not found');
   }
 
   async completeOnboarding(req: AuthenticatedRequest, res: Response): Promise<void> {
