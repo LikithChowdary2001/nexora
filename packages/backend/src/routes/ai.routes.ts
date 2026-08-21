@@ -52,24 +52,11 @@ router.post('/chat', aiRateLimiter, authenticate, requireProfile, asyncHandler(a
   }
 
   let response;
-  try {
-    response = await chatWithAssistant(
-      { message, articleIds, language: lang },
-      articles,
-      user
-    );
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : 'unknown';
-    if (msg.includes('OpenAI API key not configured')) {
-      res.status(503).json({
-        success: false,
-        error: 'AI assistant is not configured. Add OPENAI_API_KEY on Render.',
-        code: 'AI_NOT_CONFIGURED',
-      });
-      return;
-    }
-    throw error;
-  }
+  response = await chatWithAssistant(
+    { message, articleIds, language: lang },
+    articles,
+    user
+  );
 
   const now = new Date().toISOString();
   const userMessage = { id: uuidv4(), role: 'user' as const, content: message, timestamp: now };

@@ -11,11 +11,42 @@ import { config } from '../config/index.js';
 import { newsCacheRepository } from '../repositories/newsCache.repository.js';
 import { SUMMARY_PROMPT } from '../prompts/ai.prompts.js';
 import { logger } from '../utils/logger.js';
+import { ServiceUnavailableError, isOpenAIAuthError, isOpenAIQuotaError } from '../utils/errors.js';
 
 let openaiClient: OpenAI | null = null;
 
 const OPENAI_TIMEOUT_MS = 30_000;
 const OPENAI_MAX_RETRIES = 2;
+
+function toOpenAIServiceError(error: unknown): never {
+  if (error instanceof Error && error.message.includes('OpenAI API key not configured')) {
+    throw new ServiceUnavailableError(
+      'AI assistant is not configured. Add OPENAI_API_KEY on Render.',
+      'AI_NOT_CONFIGURED'
+    );
+  }
+  if (isOpenAIQuotaError(error)) {
+    throw new ServiceUnavailableError(
+      'OpenAI quota exceeded. Check billing at platform.openai.com or try again later.',
+      'AI_QUOTA_EXCEEDED'
+    );
+  }
+  if (isOpenAIAuthError(error)) {
+    throw new ServiceUnavailableError(
+      'OpenAI API key is invalid. Update OPENAI_API_KEY on Render.',
+      'AI_NOT_CONFIGURED'
+    );
+  }
+  throw error;
+}
+
+function isNonRetryableOpenAIError(error: unknown): boolean {
+  return (
+    isOpenAIQuotaError(error) ||
+    isOpenAIAuthError(error) ||
+    (error instanceof Error && error.message.includes('OpenAI API key not configured'))
+  );
+}
 
 async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   let lastError: unknown;
@@ -24,13 +55,16 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
       return await fn();
     } catch (error) {
       lastError = error;
+      if (isNonRetryableOpenAIError(error)) {
+        toOpenAIServiceError(error);
+      }
       if (attempt < OPENAI_MAX_RETRIES) {
         logger.warn('OpenAI request retry', { label, attempt: attempt + 1 });
         await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
       }
     }
   }
-  throw lastError;
+  toOpenAIServiceError(lastError);
 }
 
 function getClient(): OpenAI {

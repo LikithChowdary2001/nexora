@@ -14,8 +14,28 @@ import { newsCacheRepository } from '../repositories/newsCache.repository.js';
 import { readingHistoryRepository } from '../repositories/index.js';
 import { trendingTopicsRepository } from '../repositories/index.js';
 import { logger } from '../utils/logger.js';
+import { isFirestoreUnavailableError } from '../utils/errors.js';
 
 export { deduplicateArticles, normalizeArticle };
+
+let firestoreDegradedLogged = false;
+
+function logFirestoreDegraded(context: string, error: unknown, extra?: Record<string, unknown>): void {
+  if (isFirestoreUnavailableError(error)) {
+    if (!firestoreDegradedLogged) {
+      firestoreDegradedLogged = true;
+      logger.warn(`${context} — Firestore unavailable; continuing without persistence`, {
+        hint: 'Enable Firestore: https://console.firebase.google.com/project/nexora-28cf4/firestore',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+    return;
+  }
+  logger.warn(context, {
+    ...extra,
+    message: error instanceof Error ? error.message : 'unknown',
+  });
+}
 
 const rssParser = new Parser({
   customFields: {
@@ -140,10 +160,7 @@ export async function rankArticles(
   try {
     history = await readingHistoryRepository.getUserHistory(user.uid, 100);
   } catch (error) {
-    logger.warn('Reading history unavailable — ranking without history', {
-      uid: user.uid,
-      message: error instanceof Error ? error.message : 'unknown',
-    });
+    logFirestoreDegraded('Reading history unavailable — ranking without history', error, { uid: user.uid });
   }
   return personalizationService.rankArticles(articles, user, trendingTopics, history);
 }
@@ -161,10 +178,7 @@ export async function fetchNewsFromAllProviders(
       return articles;
     }
   } catch (error) {
-    logger.warn('News cache read failed — fetching fresh', {
-      query,
-      message: error instanceof Error ? error.message : 'unknown',
-    });
+    logFirestoreDegraded('News cache read failed — fetching fresh', error, { query });
   }
 
   const results = await Promise.allSettled([
@@ -183,10 +197,7 @@ export async function fetchNewsFromAllProviders(
   try {
     await newsCacheRepository.setCache(query, deduped);
   } catch (error) {
-    logger.warn('News cache write failed — continuing without cache', {
-      query,
-      message: error instanceof Error ? error.message : 'unknown',
-    });
+    logFirestoreDegraded('News cache write failed — continuing without cache', error, { query });
   }
 
   if (user) return rankArticles(deduped, user);
@@ -202,9 +213,7 @@ export async function fetchPersonalizedFeed(user: UserProfile): Promise<NewsArti
     const trending = await trendingTopicsRepository.getTop(10);
     trendingNames = trending.map((t) => t.topic);
   } catch (error) {
-    logger.warn('Trending topics unavailable — using interests only', {
-      message: error instanceof Error ? error.message : 'unknown',
-    });
+    logFirestoreDegraded('Trending topics unavailable — using interests only', error);
   }
 
   const queries = [

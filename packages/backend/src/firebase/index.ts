@@ -3,6 +3,7 @@ import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 let initialized = false;
+let firestoreConfigured = false;
 
 export async function verifyFirebaseAdmin(): Promise<boolean> {
   try {
@@ -47,7 +48,12 @@ export function initializeFirebase(): admin.app.App {
 
 export function getFirestore(): admin.firestore.Firestore {
   initializeFirebase();
-  return admin.firestore();
+  const db = admin.firestore();
+  if (!firestoreConfigured) {
+    db.settings({ ignoreUndefinedProperties: true });
+    firestoreConfigured = true;
+  }
+  return db;
 }
 
 export function getAuth(): admin.auth.Auth {

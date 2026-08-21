@@ -42,9 +42,25 @@ export class RateLimitError extends AppError {
 }
 
 export class ServiceUnavailableError extends AppError {
-  constructor(message = 'Service temporarily unavailable') {
-    super(503, message, 'SERVICE_UNAVAILABLE');
+  constructor(message = 'Service temporarily unavailable', code = 'SERVICE_UNAVAILABLE') {
+    super(503, message, code);
   }
+}
+
+export function isOpenAIQuotaError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const status = (error as { status?: number }).status;
+  return (
+    status === 429 ||
+    error.message.includes('429') ||
+    error.message.toLowerCase().includes('quota')
+  );
+}
+
+export function isOpenAIAuthError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const status = (error as { status?: number }).status;
+  return status === 401 || error.message.includes('Incorrect API key');
 }
 
 export function isFirestoreUnavailableError(error: unknown): boolean {

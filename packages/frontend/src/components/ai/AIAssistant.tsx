@@ -59,6 +59,8 @@ export function AIAssistant() {
         content = 'Request timed out. The server may still be waking up — please try again.';
       } else if (code === 'AI_NOT_CONFIGURED') {
         content = 'AI assistant is not configured on the server yet (OPENAI_API_KEY missing on Render).';
+      } else if (code === 'AI_QUOTA_EXCEEDED') {
+        content = 'OpenAI quota exceeded. Check billing at platform.openai.com or try again later.';
       } else if (serverMsg) {
         content = serverMsg;
       }
